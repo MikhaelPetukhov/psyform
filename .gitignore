@@ -21,9 +21,14 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local environment variables
+# Ignore all local environment files.
 .env
-.env*
-!/.env.example
+.env.local
+.env.*.local
+
+# But do not ignore example files.
+!**/.env.example
+!**/.env.sample
 
 # IDE configuration
 .idea/
