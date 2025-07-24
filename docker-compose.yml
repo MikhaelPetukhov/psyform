@@ -1,0 +1,39 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all && node server.js"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/psybooking
+      - JWT_SECRET=your_super_secret_jwt_key_that_is_long_and_random
+      - NODE_ENV=development
+    volumes:
+      - ./backend:/usr/src/app
+      # Use a named volume for node_modules to prevent it from being overwritten by the host mount.
+      - /usr/src/app/node_modules
+
+  db:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=psybooking
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
