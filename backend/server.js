@@ -8,7 +8,7 @@ const logger = require('./config/logger');
 const sequelize = require('./config/database');
 const User = require('./models/User');
 const Booking = require('./models/Booking');
-const ScheduleSettings = require('./models/ScheduleSettings'); // Corrected import
+const ScheduleSetting = require('./models/ScheduleSetting');
 const AvailableSlot = require('./models/AvailableSlot');
 
 // --- Model Associations ---
