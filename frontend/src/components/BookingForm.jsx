@@ -24,20 +24,8 @@ const BookingForm = () => {
     const fetchAndGroupSlots = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/slots'); // Returns a flat array e.g., [{id: 1, startTime: '...'}, ...]
-        const slotsArray = Array.isArray(response.data.slots) ? response.data.slots : [];
-
-        // Group slots by date, as the component expects this structure
-        const groupedSlots = slotsArray.reduce((acc, slot) => {
-          const dateKey = startOfDay(new Date(slot.startTime)).toISOString();
-          if (!acc[dateKey]) {
-            acc[dateKey] = [];
-          }
-          acc[dateKey].push(slot);
-          return acc;
-        }, {});
-
-        setSlots(groupedSlots);
+        const response = await api.get('/slots');
+        setSlots(response.data);
         setError(null);
       } catch (err) {
         setError('Не удалось загрузить доступное время. Пожалуйста, попробуйте обновить страницу.');
@@ -188,7 +176,7 @@ const BookingForm = () => {
                             : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                         }`}
                       >
-                        {format(new Date(slot.startTime), 'HH:mm')}
+                        {format(new Date(slot.slotTime), 'HH:mm')}
                       </button>
                     ))
                   ) : (
@@ -282,7 +270,7 @@ const BookingForm = () => {
                 
                 {selectedSlot && (
                    <p className="mt-3 text-xs text-center text-brand-secondary">
-                      Вы записываетесь на <span className="font-semibold text-brand-text">{format(new Date(selectedSlot.startTime), 'd MMMM yyyy', { locale: ru })} в {format(new Date(selectedSlot.startTime), 'HH:mm')}</span>
+                      Вы записываетесь на <span className="font-semibold text-brand-text">{format(new Date(selectedSlot.slotTime), 'd MMMM yyyy', { locale: ru })} в {format(new Date(selectedSlot.slotTime), 'HH:mm')}</span>
                    </p>
                 )}
               </div>
