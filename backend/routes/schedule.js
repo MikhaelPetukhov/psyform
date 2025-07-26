@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ScheduleSettings = require('../models/ScheduleSettings');
+const ScheduleSetting = require('../models/ScheduleSetting');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // @route   GET api/schedule/settings
@@ -8,10 +8,10 @@ const authMiddleware = require('../middleware/authMiddleware');
 // @access  Private (for psychologist)
 router.get('/settings', authMiddleware, async (req, res) => {
   try {
-    let settings = await ScheduleSettings.findOne();
+    let settings = await ScheduleSetting.findOne();
     if (!settings) {
       // If no settings exist, create default ones
-      settings = await ScheduleSettings.create({});
+      settings = await ScheduleSetting.create({});
     }
     res.json(settings);
   } catch (err) {
@@ -33,9 +33,9 @@ router.post('/settings', authMiddleware, async (req, res) => {
   } = req.body;
 
   try {
-    let settings = await ScheduleSettings.findOne();
+    let settings = await ScheduleSetting.findOne();
     if (!settings) {
-      settings = new ScheduleSettings();
+      settings = new ScheduleSetting();
     }
 
     settings.workingDays = workingDays || settings.workingDays;

@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 const { addDays, addMinutes, getDay, isAfter, isBefore, isEqual, isWithinInterval, parse, startOfDay } = require('date-fns');
 const logger = require('../config/logger');
 const authMiddleware = require('../middleware/authMiddleware');
-const ScheduleSettings = require('../models/ScheduleSettings');
+const ScheduleSetting = require('../models/ScheduleSetting');
 const AvailableSlot = require('../models/AvailableSlot');
 const Booking = require('../models/Booking');
 
@@ -14,7 +14,7 @@ const Booking = require('../models/Booking');
 router.post('/generate', authMiddleware, async (req, res) => {
   logger.info('POST /api/slots/generate request received');
   try {
-    const settings = await ScheduleSettings.findOne();
+    const settings = await ScheduleSetting.findOne();
     if (!settings) {
       logger.warn('Slot generation failed: Schedule settings not found.');
       return res.status(404).json({ msg: 'Schedule settings not found. Please configure them first.' });
