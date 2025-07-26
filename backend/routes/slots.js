@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Op } = require('sequelize');
-const { addDays, addMinutes, getDay, isAfter, isBefore, isEqual, isWithinInterval, parse, startOfDay } = require('date-fns');
+const { addDays, addMinutes, getDay, isAfter, isBefore, isEqual, isWithinInterval, parse, startOfDay, format } = require('date-fns');
 const logger = require('../config/logger');
 const authMiddleware = require('../middleware/authMiddleware');
 const ScheduleSetting = require('../models/ScheduleSetting');
@@ -126,13 +126,14 @@ router.get('/', async (req, res) => {
 
     logger.info(`Found ${availableSlots.length} available slots.`);
 
-    // Group slots by date for easier frontend consumption
+    // Group slots by date for easier frontend consumption.
+    // Use a timezone-agnostic key to avoid mismatches with the frontend.
     const groupedSlots = availableSlots.reduce((acc, slot) => {
-      const date = startOfDay(slot.slotTime).toISOString();
-      if (!acc[date]) {
-        acc[date] = [];
+      const dateKey = format(startOfDay(slot.slotTime), 'yyyy-MM-dd');
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
       }
-      acc[date].push(slot);
+      acc[dateKey].push(slot);
       return acc;
     }, {});
 

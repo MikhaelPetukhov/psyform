@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api';
 import { DayPicker } from 'react-day-picker';
 import { FiCalendar } from 'react-icons/fi';
-import { format, isSameDay, startOfDay } from 'date-fns';
+import { format, isSameDay, startOfDay, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import 'react-day-picker/dist/style.css';
 
@@ -51,7 +51,9 @@ const BookingForm = () => {
     }
   }, [selectedSlot, setValue]);
 
-  const availableDates = Object.keys(slots).map(dateStr => new Date(dateStr));
+  const availableDates = Object.keys(slots).map(dateStr =>
+    parse(dateStr, 'yyyy-MM-dd', new Date())
+  );
 
   const isDateAvailable = (date) => {
     return availableDates.some(availableDate => isSameDay(date, availableDate));
@@ -68,7 +70,7 @@ const BookingForm = () => {
 
   const getTimeSlotsForDate = (date) => {
     if (!date) return [];
-    const dateKey = startOfDay(date).toISOString();
+    const dateKey = format(startOfDay(date), 'yyyy-MM-dd');
     return slots[dateKey] || [];
   };
 
