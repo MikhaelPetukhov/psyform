@@ -23,7 +23,7 @@ const AdminApp = () => {
       }
     };
 
-    if (activeTab === 'settings') {
+    if (activeTab === 'schedule-settings') {
         fetchSettings();
     }
   }, [activeTab]);
@@ -86,7 +86,7 @@ const AdminApp = () => {
             <button
               onClick={() => setActiveTab('schedule-settings')}
               className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'settings'
+                activeTab === 'schedule-settings'
                   ? 'border-brand-accent text-brand-accent'
                   : 'border-transparent text-brand-secondary hover:text-brand-text hover:border-gray-300'
               }`}
