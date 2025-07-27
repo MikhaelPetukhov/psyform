@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 import BookingsTab from './BookingsTab';
 import ScheduleSettingsTab from './ScheduleSettingsTab';
-// import CalendarTab from './CalendarTab'; // To be implemented later
+import CalendarTab from './CalendarTab';
 
 import api from '../api';
 import { toast } from 'react-hot-toast';
@@ -40,8 +40,8 @@ const AdminApp = () => {
         return <BookingsTab />;
       case 'schedule-settings':
         return <ScheduleSettingsTab />;
-      // case 'calendar':
-      //   return <CalendarTab />;
+      case 'calendar':
+        return <CalendarTab />;
       default:
         return <BookingsTab />;
     }
@@ -93,7 +93,7 @@ const AdminApp = () => {
             >
               Настройки расписания
             </button>
-            {/* <button
+            <button
               onClick={() => setActiveTab('calendar')}
               className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'calendar'
@@ -102,7 +102,7 @@ const AdminApp = () => {
               }`}
             >
               Календарь
-            </button> */}
+            </button>
           </nav>
         </div>
 
