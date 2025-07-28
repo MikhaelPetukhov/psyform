@@ -49,6 +49,11 @@ const ScheduleSetting = sequelize.define('ScheduleSetting', {
     allowNull: false,
     defaultValue: 10,
   },
+  generationPeriodDays: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 30,
+  },
   lunchBreak: {
     type: DataTypes.JSONB,
     allowNull: false,
