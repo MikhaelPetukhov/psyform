@@ -32,6 +32,7 @@ module.exports = {
         workingHours: JSON.stringify({ start: '09:00', end: '18:00' }),
         sessionDuration: 60,                 // 60 minutes
         breakBetweenSessions: 15,                // 15 minutes
+        generationPeriodDays: 30,
         lunchBreak: JSON.stringify({ enabled: true, start: '13:00', end: '14:00' }),
         createdAt: new Date(),
         updatedAt: new Date(),

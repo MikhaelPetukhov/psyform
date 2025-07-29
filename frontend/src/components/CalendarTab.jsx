@@ -40,6 +40,8 @@ const CalendarTab = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -106,10 +108,11 @@ const CalendarTab = () => {
     .sort((a, b) => a.start - b.start);
 
   return (
-    <div className="calendar-contain">
+
+    <div className={`calendar-contain ${menuOpen ? 'menu-open' : ''}`}>
       <section className="title-bar">
-        <button className="title-bar__burger" onClick={prevMonth}>
-          <span className="burger__lines">Prev</span>
+        <button className="title-bar__burger" onClick={() => setMenuOpen(!menuOpen)}>
+          <span className="burger__lines">Menu</span>
         </button>
         <span className="title-bar__year">
           {format(currentMonth, 'LLLL yyyy', { locale: ru })}
@@ -117,7 +120,8 @@ const CalendarTab = () => {
         <span className="title-bar__month">Month</span>
         <div className="title-bar__controls">
           <div className="title-bar__minimize" onClick={nextMonth}></div>
-          <div className="title-bar__maximize"></div>
+
+          <div className="title-bar__maximize" onClick={prevMonth}></div>
           <div className="title-bar__close"></div>
         </div>
       </section>
@@ -157,8 +161,14 @@ const CalendarTab = () => {
       </section>
 
       <BookingDetailsModal booking={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      {menuOpen && (
+        <div className="calendar-menu">
+          {/* Placeholder for upcoming menu */}
+        </div>
+      )}
     </div>
   );
 };
 
 export default CalendarTab;
+
