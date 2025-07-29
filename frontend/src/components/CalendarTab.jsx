@@ -42,6 +42,7 @@ const CalendarTab = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+
   useEffect(() => {
     const fetchBookings = async () => {
       try {
@@ -107,6 +108,7 @@ const CalendarTab = () => {
     .sort((a, b) => a.start - b.start);
 
   return (
+
     <div className={`calendar-contain ${menuOpen ? 'menu-open' : ''}`}>
       <section className="title-bar">
         <button className="title-bar__burger" onClick={() => setMenuOpen(!menuOpen)}>
@@ -118,6 +120,7 @@ const CalendarTab = () => {
         <span className="title-bar__month">Month</span>
         <div className="title-bar__controls">
           <div className="title-bar__minimize" onClick={nextMonth}></div>
+
           <div className="title-bar__maximize" onClick={prevMonth}></div>
           <div className="title-bar__close"></div>
         </div>
