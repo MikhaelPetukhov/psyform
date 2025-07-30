@@ -9,12 +9,17 @@ import {
   endOfWeek,
   addMonths,
   subMonths,
+  setMonth,
   isSameMonth,
   isSameDay,
 } from 'date-fns';
 import ru from 'date-fns/locale/ru';
 import api from '../api';
 import '../styles/calendar.css';
+
+const months = Array.from({ length: 12 }, (_, i) =>
+  format(new Date(2020, i, 1), 'LLLL', { locale: ru })
+);
 
 const BookingDetailsModal = ({ booking, onClose }) => {
   if (!booking) return null;
@@ -217,7 +222,20 @@ const CalendarTab = () => {
         <span className="title-bar__year">
           {format(currentMonth, 'LLLL yyyy', { locale: ru })}
         </span>
-        <span className="title-bar__month">Month</span>
+        <span className="title-bar__month">
+          <select
+            value={currentMonth.getMonth()}
+            onChange={(e) =>
+              setCurrentMonth(setMonth(currentMonth, Number(e.target.value)))
+            }
+          >
+            {months.map((m, idx) => (
+              <option value={idx} key={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </span>
         <div className="title-bar__controls">
           <button className="month-prev" onClick={prevMonth}>
             <FiChevronLeft />
