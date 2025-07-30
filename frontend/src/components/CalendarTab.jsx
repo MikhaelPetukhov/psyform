@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import {
   startOfWeek,
   addDays,
@@ -218,8 +219,12 @@ const CalendarTab = () => {
         </span>
         <span className="title-bar__month">Month</span>
         <div className="title-bar__controls">
-          <div className="title-bar__minimize" onClick={nextMonth}></div>
-          <div className="title-bar__maximize" onClick={prevMonth}></div>
+          <button className="month-prev" onClick={prevMonth}>
+            <FiChevronLeft />
+          </button>
+          <button className="month-next" onClick={nextMonth}>
+            <FiChevronRight />
+          </button>
           <div className="title-bar__close"></div>
         </div>
       </section>

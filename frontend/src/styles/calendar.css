@@ -162,6 +162,31 @@
   content: none;
 }
 
+.month-prev,
+.month-next {
+  position: relative;
+  float: left;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.month-prev svg,
+.month-next svg {
+  width: 20px;
+  height: 20px;
+}
+
+.month-prev:focus,
+.month-next:focus {
+  outline: none;
+}
+
 .title-bar .title-bar__minimize:before {
   border-bottom-width: 2px;
 }
