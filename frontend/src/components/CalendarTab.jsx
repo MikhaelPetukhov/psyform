@@ -35,33 +35,123 @@ const BookingDetailsModal = ({ booking, onClose }) => {
   );
 };
 
+const AddBookingModal = ({ slot, onClose, onCreated }) => {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/bookings', {
+        name,
+        phone,
+        slotId: slot.id,
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      console.error('Failed to create booking', err);
+    }
+  };
+
+  if (!slot) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white p-6 rounded-lg w-80 shadow-lg flex flex-col gap-3"
+      >
+        <h4 className="text-lg font-semibold mb-1">Записать клиента</h4>
+        <p className="text-sm mb-2">
+          {format(new Date(slot.slotTime), 'dd.MM.yyyy HH:mm')}
+        </p>
+        <input
+          type="text"
+          required
+          placeholder="Имя"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="border rounded px-2 py-1 text-sm"
+        />
+        <input
+          type="tel"
+          required
+          placeholder="Телефон"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="border rounded px-2 py-1 text-sm"
+        />
+        <div className="flex justify-end gap-2 mt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200"
+          >
+            Отмена
+          </button>
+          <button
+            type="submit"
+            className="px-3 py-1 rounded text-sm bg-brand-accent text-white"
+          >
+            Записать
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 const CalendarTab = () => {
   const [events, setEvents] = useState([]);
+  const [slots, setSlots] = useState([]);
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [slotModal, setSlotModal] = useState(null);
 
+  const fetchBookings = async () => {
+    try {
+      const response = await api.get('/bookings');
+      const bookings = response.data;
+      const mapped = bookings.map((b) => ({
+        id: b.id,
+        title: b.clientName,
+        start: new Date(b.slotTime),
+        end: new Date(b.endTime),
+        clientName: b.clientName,
+        clientPhone: b.clientPhone,
+      }));
+      setEvents(mapped);
+    } catch (err) {
+      console.error('Failed to fetch bookings', err);
+    }
+  };
+
+  const fetchSlots = async () => {
+    try {
+      const res = await api.get('/slots');
+      const slotGroups = res.data || {};
+      const all = [];
+      Object.keys(slotGroups).forEach((dateKey) => {
+        all.push(...slotGroups[dateKey]);
+      });
+      setSlots(all);
+    } catch (err) {
+      console.error('Failed to fetch slots', err);
+    }
+  };
+
+  const refreshData = () => {
+    fetchBookings();
+    fetchSlots();
+  };
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const response = await api.get('/bookings');
-        const bookings = response.data;
-        const mapped = bookings.map((b) => ({
-          id: b.id,
-          title: b.clientName,
-          start: new Date(b.slotTime),
-          end: new Date(b.endTime),
-          clientName: b.clientName,
-          clientPhone: b.clientPhone,
-        }));
-        setEvents(mapped);
-      } catch (err) {
-        console.error('Failed to fetch bookings', err);
-      }
-    };
     fetchBookings();
+    fetchSlots();
+
   }, []);
 
   const monthStart = startOfMonth(currentMonth);
@@ -80,6 +170,9 @@ const CalendarTab = () => {
       formattedDate = format(day, dateFormat, { locale: ru });
       const cloneDay = day;
       const dayEvents = events.filter((e) => isSameDay(e.start, cloneDay));
+
+      const daySlots = slots.filter((s) => isSameDay(new Date(s.slotTime), cloneDay));
+
       days.push(
         <div
           className={`calendar__day ${!isSameMonth(day, monthStart) ? 'inactive' : ''} ${isSameDay(day, selectedDate) ? 'today' : ''}`}
@@ -87,7 +180,8 @@ const CalendarTab = () => {
           onClick={() => setSelectedDate(cloneDay)}
         >
           <span className="calendar__date">{formattedDate}</span>
-          <span className={`calendar__task${isSameDay(day, selectedDate) ? ' calendar__task--today' : ''}`}>{dayEvents.length}</span>
+
+          <span className={`calendar__task${isSameDay(day, selectedDate) ? ' calendar__task--today' : ''}`}>{dayEvents.length}/{daySlots.length}</span>
         </div>
       );
       day = addDays(day, 1);
@@ -107,6 +201,11 @@ const CalendarTab = () => {
     .filter((e) => isSameDay(e.start, selectedDate))
     .sort((a, b) => a.start - b.start);
 
+
+  const slotsForSelectedDate = slots
+    .filter((s) => isSameDay(new Date(s.slotTime), selectedDate))
+    .sort((a, b) => new Date(a.slotTime) - new Date(b.slotTime));
+
   return (
 
     <div className={`calendar-contain ${menuOpen ? 'menu-open' : ''}`}>
@@ -120,7 +219,6 @@ const CalendarTab = () => {
         <span className="title-bar__month">Month</span>
         <div className="title-bar__controls">
           <div className="title-bar__minimize" onClick={nextMonth}></div>
-
           <div className="title-bar__maximize" onClick={prevMonth}></div>
           <div className="title-bar__close"></div>
         </div>
@@ -147,6 +245,24 @@ const CalendarTab = () => {
             </li>
           ))}
         </ul>
+        {slotsForSelectedDate.length > 0 && (
+          <>
+            <h3 className="sidebar__heading text-xl mt-6">Свободные слоты</h3>
+            <ul className="sidebar__list">
+              {slotsForSelectedDate.map((slot) => (
+                <li
+                  key={slot.id}
+                  className="sidebar__list-item cursor-pointer text-brand-accent"
+                  onClick={() => setSlotModal(slot)}
+                >
+                  <span className="list-item__time">{format(slot.slotTime, 'HH:mm')}</span>
+                  Добавить запись
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
       </aside>
 
       <section className="calendar__days">
@@ -161,6 +277,13 @@ const CalendarTab = () => {
       </section>
 
       <BookingDetailsModal booking={selectedEvent} onClose={() => setSelectedEvent(null)} />
+
+      <AddBookingModal
+        slot={slotModal}
+        onClose={() => setSlotModal(null)}
+        onCreated={refreshData}
+      />
+
       {menuOpen && (
         <div className="calendar-menu">
           {/* Placeholder for upcoming menu */}
