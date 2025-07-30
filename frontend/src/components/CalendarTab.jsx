@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi';
 import {
   startOfWeek,
   addDays,
@@ -317,8 +317,9 @@ const CalendarTab = () => {
             <button
               className="menu-close"
               onClick={() => setMenuOpen(false)}
+              aria-label="Close menu"
             >
-              ×
+              <FiX />
             </button>
             {/* Placeholder for upcoming menu */}
           </div>
