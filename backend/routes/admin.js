@@ -38,6 +38,7 @@ router.put(
         body('sessionDuration').isInt({ min: 15, max: 180 }).withMessage('Длительность сессии должна быть от 15 до 180 минут'),
         body('breakBetweenSessions').isInt({ min: 0, max: 60 }).withMessage('Перерыв должен быть от 0 до 60 минут'),
         body('lunchBreak.enabled').isBoolean(),
+        body('generationPeriodDays').optional().isInt({ min: 1, max: 90 }).withMessage('Период генерации должен быть от 1 до 90 дней'),
     ]
   ],
   async (req, res) => {
