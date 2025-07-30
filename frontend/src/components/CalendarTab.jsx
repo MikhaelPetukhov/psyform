@@ -285,9 +285,21 @@ const CalendarTab = () => {
       />
 
       {menuOpen && (
-        <div className="calendar-menu">
-          {/* Placeholder for upcoming menu */}
-        </div>
+        <>
+          <div
+            className="menu-backdrop"
+            onClick={() => setMenuOpen(false)}
+          ></div>
+          <div className="calendar-menu">
+            <button
+              className="menu-close"
+              onClick={() => setMenuOpen(false)}
+            >
+              ×
+            </button>
+            {/* Placeholder for upcoming menu */}
+          </div>
+        </>
       )}
     </div>
   );
