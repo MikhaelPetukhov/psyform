@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api';
 import { DayPicker } from 'react-day-picker';
 import { FiCalendar } from 'react-icons/fi';
+import CalendarModal from './CalendarModal';
 import { format, isSameDay, startOfDay, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import 'react-day-picker/dist/style.css';
@@ -40,6 +41,7 @@ const BookingForm = () => {
   const [selectedDate, setSelectedDate] = useState(undefined);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm();
 
@@ -145,6 +147,7 @@ const BookingForm = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-brand-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-200/60 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-2">
@@ -152,6 +155,13 @@ const BookingForm = () => {
           <div className="p-6 sm:p-8 border-r border-gray-200/60">
             <h2 className="text-xl font-bold text-brand-text mb-1">Запись на консультацию</h2>
             <p className="text-brand-secondary mb-6 text-sm">1. Выберите удобную дату и время</p>
+            <button
+              type="button"
+              onClick={() => setIsCalendarOpen(true)}
+              className="mb-4 flex items-center text-sm text-brand-accent hover:underline"
+            >
+              <FiCalendar className="mr-2" /> Открыть календарь
+            </button>
             <DayPicker
               mode="single"
               selected={selectedDate}
@@ -282,6 +292,8 @@ const BookingForm = () => {
         </div>
       </div>
     </div>
+    <CalendarModal isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
+    </>
   );
 };
 
