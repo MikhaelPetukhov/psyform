@@ -104,6 +104,7 @@ const AddBookingModal = ({ slot, onClose, onCreated }) => {
 const CalendarTab = () => {
   const [events, setEvents] = useState([]);
   const [slots, setSlots] = useState([]);
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -150,6 +151,7 @@ const CalendarTab = () => {
   useEffect(() => {
     fetchBookings();
     fetchSlots();
+
   }, []);
 
   const monthStart = startOfMonth(currentMonth);
@@ -168,7 +170,9 @@ const CalendarTab = () => {
       formattedDate = format(day, dateFormat, { locale: ru });
       const cloneDay = day;
       const dayEvents = events.filter((e) => isSameDay(e.start, cloneDay));
+
       const daySlots = slots.filter((s) => isSameDay(new Date(s.slotTime), cloneDay));
+
       days.push(
         <div
           className={`calendar__day ${!isSameMonth(day, monthStart) ? 'inactive' : ''} ${isSameDay(day, selectedDate) ? 'today' : ''}`}
@@ -176,6 +180,7 @@ const CalendarTab = () => {
           onClick={() => setSelectedDate(cloneDay)}
         >
           <span className="calendar__date">{formattedDate}</span>
+
           <span className={`calendar__task${isSameDay(day, selectedDate) ? ' calendar__task--today' : ''}`}>{dayEvents.length}/{daySlots.length}</span>
         </div>
       );
@@ -196,11 +201,13 @@ const CalendarTab = () => {
     .filter((e) => isSameDay(e.start, selectedDate))
     .sort((a, b) => a.start - b.start);
 
+
   const slotsForSelectedDate = slots
     .filter((s) => isSameDay(new Date(s.slotTime), selectedDate))
     .sort((a, b) => new Date(a.slotTime) - new Date(b.slotTime));
 
   return (
+
     <div className={`calendar-contain ${menuOpen ? 'menu-open' : ''}`}>
       <section className="title-bar">
         <button className="title-bar__burger" onClick={() => setMenuOpen(!menuOpen)}>
@@ -255,6 +262,7 @@ const CalendarTab = () => {
             </ul>
           </>
         )}
+
       </aside>
 
       <section className="calendar__days">
@@ -269,11 +277,13 @@ const CalendarTab = () => {
       </section>
 
       <BookingDetailsModal booking={selectedEvent} onClose={() => setSelectedEvent(null)} />
+
       <AddBookingModal
         slot={slotModal}
         onClose={() => setSlotModal(null)}
         onCreated={refreshData}
       />
+
       {menuOpen && (
         <div className="calendar-menu">
           {/* Placeholder for upcoming menu */}
