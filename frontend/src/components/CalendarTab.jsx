@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi';
 import {
   startOfWeek,
@@ -117,6 +117,8 @@ const CalendarTab = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [slotModal, setSlotModal] = useState(null);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const monthRef = useRef(null);
 
   const fetchBookings = async () => {
     try {
@@ -159,6 +161,16 @@ const CalendarTab = () => {
     fetchBookings();
     fetchSlots();
 
+  }, []);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (monthRef.current && !monthRef.current.contains(e.target)) {
+        setMonthOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   const monthStart = startOfMonth(currentMonth);
@@ -204,6 +216,11 @@ const CalendarTab = () => {
     setCurrentMonth(subMonths(currentMonth, 1));
   };
 
+  const handleMonthSelect = (idx) => {
+    setCurrentMonth(setMonth(currentMonth, idx));
+    setMonthOpen(false);
+  };
+
   const eventsForSelectedDate = events
     .filter((e) => isSameDay(e.start, selectedDate))
     .sort((a, b) => a.start - b.start);
@@ -223,19 +240,21 @@ const CalendarTab = () => {
         <span className="title-bar__year">
           {format(currentMonth, 'yyyy', { locale: ru })}
         </span>
-        <span className="title-bar__month">
-          <select
-            value={currentMonth.getMonth()}
-            onChange={(e) =>
-              setCurrentMonth(setMonth(currentMonth, Number(e.target.value)))
-            }
+        <span className="title-bar__month" ref={monthRef}>
+          <button
+            type="button"
+            className="title-bar__month-button"
+            onClick={() => setMonthOpen((o) => !o)}
           >
+            {format(currentMonth, 'LLLL', { locale: ru })}
+          </button>
+          <ul className={`month-dropdown ${monthOpen ? 'open' : ''}`}>
             {months.map((m, idx) => (
-              <option value={idx} key={m}>
+              <li key={m} onClick={() => handleMonthSelect(idx)}>
                 {m}
-              </option>
+              </li>
             ))}
-          </select>
+          </ul>
         </span>
         <div className="title-bar__controls">
           <button

@@ -127,7 +127,7 @@
   transform: rotate(135deg);
 }
 
-.title-bar__month select {
+.title-bar__month-button {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -139,6 +139,33 @@
   line-height: inherit;
   color: inherit;
   cursor: pointer;
+  text-align: left;
+}
+
+.month-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  transition: max-height 0.2s ease;
+  z-index: 10;
+}
+
+.month-dropdown.open {
+  max-height: 14rem;
+}
+
+.month-dropdown li {
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.month-dropdown li:hover {
+  background-color: #f0f0f0;
 }
 
 .title-bar__minimize,
