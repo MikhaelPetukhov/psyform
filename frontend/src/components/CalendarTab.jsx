@@ -335,24 +335,20 @@ const CalendarTab = () => {
         onCreated={refreshData}
       />
 
-      {menuOpen && (
-        <>
-          <div
-            className="menu-backdrop"
-            onClick={() => setMenuOpen(false)}
-          ></div>
-          <div className="calendar-menu">
-            <button
-              className="menu-close"
-              onClick={() => setMenuOpen(false)}
-              aria-label="Close menu"
-            >
-              <FiX />
-            </button>
-            {/* Placeholder for upcoming menu */}
-          </div>
-        </>
-      )}
+      <div
+        className="menu-backdrop"
+        onClick={() => setMenuOpen(false)}
+      ></div>
+      <div className="calendar-menu">
+        <button
+          className="menu-close"
+          onClick={() => setMenuOpen(false)}
+          aria-label="Close menu"
+        >
+          <FiX />
+        </button>
+        {/* Placeholder for upcoming menu */}
+      </div>
     </div>
   );
 };
