@@ -258,14 +258,14 @@ const CalendarTab = () => {
         </span>
         <div className="title-bar__controls">
           <button
-            className="title-bar__minimize"
+            className="month-prev"
             onClick={prevMonth}
             aria-label="Предыдущий месяц"
           >
             <FiChevronLeft />
           </button>
           <button
-            className="title-bar__maximize"
+            className="month-next"
             onClick={nextMonth}
             aria-label="Следующий месяц"
           >
