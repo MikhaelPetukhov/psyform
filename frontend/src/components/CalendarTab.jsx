@@ -17,8 +17,9 @@ import ru from 'date-fns/locale/ru';
 import api from '../api';
 import '../styles/calendar.css';
 
+// Month names for the dropdown. Using a fixed year ensures correct locale formatting
 const months = Array.from({ length: 12 }, (_, i) =>
-  format(new Date(2020, i, 1), 'LLLL', { locale: ru })
+  format(new Date(2025, i, 1), 'LLLL', { locale: ru })
 );
 
 const BookingDetailsModal = ({ booking, onClose }) => {
@@ -220,7 +221,7 @@ const CalendarTab = () => {
           <span className="burger__lines">Menu</span>
         </button>
         <span className="title-bar__year">
-          {format(currentMonth, 'LLLL yyyy', { locale: ru })}
+          {format(currentMonth, 'yyyy', { locale: ru })}
         </span>
         <span className="title-bar__month">
           <select
