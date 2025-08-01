@@ -86,6 +86,7 @@ const BookingsTab = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-secondary uppercase tracking-wider"><FiUser className="inline-block mr-2 -mt-0.5" />Клиент</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-secondary uppercase tracking-wider"><FiCalendar className="inline-block mr-2 -mt-0.5" />Дата и время</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-secondary uppercase tracking-wider"><FiPhone className="inline-block mr-2 -mt-0.5" />Телефон</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-secondary uppercase tracking-wider">Телеграм</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-secondary uppercase tracking-wider"><FiInfo className="inline-block mr-2 -mt-0.5" />Статус</th>
             </tr>
           </thead>
@@ -97,6 +98,15 @@ const BookingsTab = () => {
                   {new Date(booking.slotTime).toLocaleString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">{booking.clientPhone}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
+                  {booking.clientTelegram ? (
+                    <a href={"https://t.me/" + booking.clientTelegram} target="_blank" rel="noopener noreferrer">
+                      {booking.clientTelegram}
+                    </a>
+                  ) : (
+                    '-'
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <StatusBadge status={booking.status} />
                 </td>
