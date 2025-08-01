@@ -20,6 +20,7 @@ const bookingRoutes = require('./routes/bookings');
 const adminRoutes = require('./routes/admin');
 const scheduleRoutes = require('./routes/schedule');
 const slotsRoutes = require('./routes/slots');
+const telegramRoutes = require('./routes/telegram');
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/slots', slotsRoutes);
 app.use('/api/schedule', scheduleRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'PsyBooking API is running' });
