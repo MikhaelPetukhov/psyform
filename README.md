@@ -124,3 +124,17 @@ You need to run the backend and frontend servers in separate terminals.
       npm start
       ```
     - The React application will open automatically in your browser at `http://localhost:3000`.
+
+### Telegram Lookup Setup
+
+The application can display Telegram usernames and avatars for phone numbers. To enable this feature:
+
+1. Create a Telegram application at [my.telegram.org](https://my.telegram.org/) to obtain an **API ID** and **API Hash**.
+2. Generate a session string using a tool like [GramJS](https://gram.js.org/) or Telethon.
+3. Add the credentials to `/backend/.env`:
+   ```
+   TELEGRAM_API_ID=<your_api_id>
+   TELEGRAM_API_HASH=<your_api_hash>
+   TELEGRAM_SESSION=<your_session_string>
+   ```
+4. Restart the backend server after saving the file.

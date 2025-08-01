@@ -28,6 +28,8 @@ const BookingsTab = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lookupCache, setLookupCache] = useState({});
+  const [tooltip, setTooltip] = useState({ phone: null, visible: false });
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -47,6 +49,25 @@ const BookingsTab = () => {
 
     fetchBookings();
   }, []);
+
+  const handleLookup = async (phone) => {
+    if (lookupCache[phone]) return;
+    try {
+      const res = await api.get('/telegram/lookup', { params: { phone } });
+      setLookupCache((prev) => ({ ...prev, [phone]: res.data }));
+    } catch (err) {
+      console.error('Lookup failed', err);
+    }
+  };
+
+  const showTooltip = (phone) => {
+    setTooltip({ phone, visible: true });
+    handleLookup(phone);
+  };
+
+  const hideTooltip = () => {
+    setTooltip({ phone: null, visible: false });
+  };
 
   const renderContent = () => {
     if (loading) {
@@ -97,7 +118,31 @@ const BookingsTab = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
                   {new Date(booking.slotTime).toLocaleString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">{booking.clientPhone}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary relative">
+                  <span
+                    onMouseEnter={() => showTooltip(booking.clientPhone)}
+                    onMouseLeave={hideTooltip}
+                    className="cursor-pointer"
+                  >
+                    {lookupCache[booking.clientPhone]?.username ? (
+                      <a href={`tg://resolve?domain=${lookupCache[booking.clientPhone].username}`}>{booking.clientPhone}</a>
+                    ) : (
+                      booking.clientPhone
+                    )}
+                  </span>
+                  {tooltip.visible && tooltip.phone === booking.clientPhone && lookupCache[booking.clientPhone] && (
+                    <div className="absolute left-full ml-2 top-0 bg-white border rounded shadow-lg p-2 flex items-center space-x-2 z-10">
+                      {lookupCache[booking.clientPhone].avatar && (
+                        <img
+                          src={`data:image/jpeg;base64,${lookupCache[booking.clientPhone].avatar}`}
+                          alt="avatar"
+                          className="w-8 h-8 rounded-full"
+                        />
+                      )}
+                      <span className="text-xs">{lookupCache[booking.clientPhone].username || 'No username'}</span>
+                    </div>
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
                   {booking.clientTelegram ? (
                     <a href={"https://t.me/" + booking.clientTelegram} target="_blank" rel="noopener noreferrer">
