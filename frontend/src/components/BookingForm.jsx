@@ -90,6 +90,7 @@ const BookingForm = () => {
         name: data.name,
         email: data.email,
         phone: data.phone,
+        telegram: data.telegram,
         comment: data.comment,
         slotId: selectedSlot.id,
       });
@@ -252,6 +253,22 @@ const BookingForm = () => {
                   className="w-full px-4 py-2.5 bg-white border border-gray-300/70 rounded-lg focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20 transition-colors text-sm text-brand-text placeholder-gray-400"
                   placeholder="+7 (999) 123-45-67"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-brand-secondary mb-1.5">Telegram</label>
+                <input
+                  type="text"
+                  {...register('telegram', {
+                    pattern: {
+                      value: /^@\w{5,}$/,
+                      message: 'Некорректный Telegram username',
+                    },
+                  })}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300/70 rounded-lg focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20 transition-colors text-sm text-brand-text placeholder-gray-400"
+                  placeholder="@username"
+                />
+                {errors.telegram && <p className="mt-1 text-xs text-red-600">{errors.telegram.message}</p>}
               </div>
 
               <div>
