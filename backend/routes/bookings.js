@@ -30,6 +30,7 @@ router.post(
     body('name').not().isEmpty().withMessage('Имя обязательно'),
     body('email').isEmail().withMessage('Некорректный email'),
     body('phone').optional().isString(),
+    body('telegram').optional().isString(),
     body('slotId').not().isEmpty().withMessage('Не выбран слот'),
   ],
   async (req, res) => {
@@ -38,7 +39,7 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, phone, slotId } = req.body;
+    const { name, email, phone, telegram, slotId } = req.body;
 
     try {
       const slot = await AvailableSlot.findByPk(slotId);
@@ -50,6 +51,7 @@ router.post(
         clientName: name,
         clientEmail: email,
         clientPhone: phone,
+        clientTelegram: telegram,
         slotTime: slot.slotTime,
         endTime: slot.endTime,
       });

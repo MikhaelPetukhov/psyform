@@ -17,10 +17,14 @@ const Booking = sequelize.define('Booking', {
   },
   clientEmail: {
     type: DataTypes.STRING,
-    allowNull: true, 
+    allowNull: true,
     validate: {
       isEmail: true,
     },
+  },
+  clientTelegram: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   slotTime: {
     type: DataTypes.DATE,
