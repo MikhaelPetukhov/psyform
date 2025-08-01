@@ -27,7 +27,7 @@ Modern, self-hosted booking system for psychologists and therapists, built with 
 This project is a monorepo containing two main packages: `frontend` and `backend`.
 
 ```
-psybooking/
+psyform/
 ├── .github/         # GitHub Actions workflows
 ├── backend/         # Node.js/Express backend application
 │   ├── config/      # Database and logger configuration
@@ -69,8 +69,8 @@ Follow these instructions to get the project up and running on your local machin
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/virtualsect/psybooking.git
-    cd psybooking
+    git clone https://github.com/virtualsect/psyform.git
+    cd psyform
     ```
 
 2.  **Set up the Backend:**
