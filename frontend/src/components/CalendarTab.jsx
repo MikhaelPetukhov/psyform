@@ -45,6 +45,7 @@ const BookingDetailsModal = ({ booking, onClose }) => {
 const AddBookingModal = ({ slot, onClose, onCreated }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [telegram, setTelegram] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,6 +53,7 @@ const AddBookingModal = ({ slot, onClose, onCreated }) => {
       await api.post('/bookings', {
         name,
         phone,
+        telegram,
         slotId: slot.id,
       });
       onCreated();
@@ -86,6 +88,13 @@ const AddBookingModal = ({ slot, onClose, onCreated }) => {
           placeholder="Телефон"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          className="border rounded px-2 py-1 text-sm"
+        />
+        <input
+          type="text"
+          placeholder="Telegram"
+          value={telegram}
+          onChange={(e) => setTelegram(e.target.value)}
           className="border rounded px-2 py-1 text-sm"
         />
         <div className="flex justify-end gap-2 mt-2">
