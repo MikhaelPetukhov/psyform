@@ -1,5 +1,4 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+module.exports = (sequelize, DataTypes) => {
 
 const AvailableSlot = sequelize.define('AvailableSlot', {
   id: {
@@ -10,17 +9,49 @@ const AvailableSlot = sequelize.define('AvailableSlot', {
   slotTime: {
     type: DataTypes.DATE,
     allowNull: false,
-    unique: true, // Each slot time must be unique
+    comment: 'Start time in UTC (timestamptz)'
   },
   endTime: {
     type: DataTypes.DATE,
     allowNull: false,
+    comment: 'End time in UTC (timestamptz)'
+  },
+  sourceTimezone: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'Europe/Moscow',
+    comment: 'Original timezone when slot was created'
   },
   isBooked: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false,
   },
+  // Multi-tenant scope
+  practitionerId: {
+    type: DataTypes.UUID,
+    allowNull: false, // Required for multi-tenant isolation
+    references: {
+      model: 'Practitioners',
+      key: 'id'
+    }
+  },
+}, {
+  indexes: [
+    {
+      fields: ['practitionerId']
+    },
+    {
+      fields: ['slotTime']
+    },
+    {
+      fields: ['isBooked']
+    },
+    {
+      fields: ['practitionerId', 'slotTime']
+    }
+  ]
 });
 
-module.exports = AvailableSlot;
+return AvailableSlot;
+};

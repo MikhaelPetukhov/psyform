@@ -1,35 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
-import { FiCalendar, FiPhone, FiUser, FiInfo, FiLoader, FiAlertTriangle } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import { FiCalendar, FiPhone, FiUser, FiInfo, FiLoader, FiAlertTriangle, FiCheck, FiX } from 'react-icons/fi';
+import RescheduleModal from './RescheduleModal';
+import { SiTelegram } from 'react-icons/si';
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, clientConfirmation, onSendConfirmationRequest, bookingId }) => {
   const baseClasses = "px-3 py-1 text-xs font-semibold rounded-full inline-block";
   let specificClasses = "";
   let text = status;
+  let isClickable = false;
 
-  switch (status) {
-    case 'confirmed':
-      specificClasses = "bg-green-100 text-green-800";
-      text = 'Подтверждена';
-      break;
-    case 'cancelled':
-      specificClasses = "bg-red-100 text-red-800";
-      text = 'Отменена';
-      break;
-    default:
-      specificClasses = "bg-yellow-100 text-yellow-800";
-      break;
+  if (clientConfirmation === 'pending') {
+    specificClasses = "bg-yellow-100 text-yellow-800 cursor-pointer hover:bg-yellow-200";
+    text = 'Ожидает подтверждения';
+    isClickable = true;
+  } else if (clientConfirmation === 'confirmed') {
+    specificClasses = "bg-green-100 text-green-800";
+    text = 'Подтверждена';
+  } else if (clientConfirmation === 'declined') {
+    specificClasses = "bg-red-100 text-red-800";
+    text = 'Отменена клиентом';
   }
 
-  return <span className={`${baseClasses} ${specificClasses}`}>{text}</span>;
+  if (!clientConfirmation) {
+    switch (status) {
+      case 'confirmed':
+        specificClasses = "bg-green-100 text-green-800";
+        text = 'Подтверждена';
+        break;
+      case 'cancelled':
+        specificClasses = "bg-red-100 text-red-800";
+        text = 'Отменена';
+        break;
+      case 'completed':
+        specificClasses = "bg-green-100 text-green-800";
+        text = 'Завершена';
+        break;
+      default:
+        specificClasses = "bg-yellow-100 text-yellow-800 cursor-pointer hover:bg-yellow-200";
+        text = 'Ожидает подтверждения';
+        isClickable = true;
+        break;
+    }
+  }
+
+  const handleClick = () => {
+    if (isClickable && onSendConfirmationRequest) {
+      onSendConfirmationRequest(bookingId);
+    }
+  };
+
+  return (
+    <span 
+      className={`${baseClasses} ${specificClasses} ${isClickable ? 'transition-colors' : ''}`}
+      onClick={handleClick}
+      title={isClickable ? 'Нажмите, чтобы отправить запрос на подтверждение' : ''}
+    >
+      {text}
+    </span>
+  );
 };
 
-const BookingsTab = () => {
+const BookingsTab = ({ practitionerTimezone = 'Europe/Moscow', focusId = null }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [lookupCache, setLookupCache] = useState({});
-  const [tooltip, setTooltip] = useState({ phone: null, visible: false });
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleBooking, setRescheduleBooking] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const rowRefs = useRef({});
+  // Telegram lookup is persisted on the server at booking creation
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -40,8 +81,7 @@ const BookingsTab = () => {
         setBookings(response.data);
         setError(null);
       } catch (err) {
-        setError('Не удалось загрузить записи. Попробуйте обновить страницу.');
-        console.error(err);
+        setError('Ошибка загрузки записей');
       } finally {
         setLoading(false);
       }
@@ -50,23 +90,62 @@ const BookingsTab = () => {
     fetchBookings();
   }, []);
 
-  const handleLookup = async (phone) => {
-    if (lookupCache[phone]) return;
+  // When bookings are loaded/updated and we have focusId -> scroll and highlight
+  useEffect(() => {
+    if (!focusId || !bookings || bookings.length === 0) return;
+    const idStr = String(focusId);
+    const found = bookings.find((b) => String(b.id) === idStr);
+    if (!found) return;
+    setHighlightId(found.id);
+    // Scroll into view gently
     try {
-      const res = await api.get('/telegram/lookup', { params: { phone } });
-      setLookupCache((prev) => ({ ...prev, [phone]: res.data }));
-    } catch (err) {
-      console.error('Lookup failed', err);
+      const el = rowRefs.current[found.id];
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (_) {}
+    // Remove highlight after 2.5s
+    const t = setTimeout(() => setHighlightId(null), 2500);
+    return () => clearTimeout(t);
+  }, [focusId, bookings]);
+
+  // Removed hover-lookup and tooltip logic
+
+  const handleSendConfirmationRequest = async (bookingId) => {
+    try {
+      await api.post(`/bookings/${bookingId}/send-confirmation`);
+      toast.success('Запрос на подтверждение отправлен клиенту');
+    } catch (error) {
+      console.error('Error sending confirmation request:', error);
+      
+      const errorMsg = error?.response?.data?.msg
+        || (error?.response?.status === 400 ? 'Не удалось отправить: клиент не найден или не связан с Telegram' : null)
+        || 'Ошибка при отправке запроса на подтверждение';
+      toast.error(errorMsg, { duration: 6000 });
     }
   };
 
-  const showTooltip = (phone) => {
-    setTooltip({ phone, visible: true });
-    handleLookup(phone);
+  const handleDelete = async (booking) => {
+    const name = booking.clientName || 'клиент';
+    const ok = window.confirm(`Действительно удалить запись для клиента «${name}»?`);
+    if (!ok) return;
+    const id = toast.loading('Удаляем запись...');
+    try {
+      await api.delete(`/bookings/${booking.id}`);
+      setBookings((prev) => prev.filter((b) => b.id !== booking.id));
+      toast.success('Запись удалена', { id });
+    } catch (e) {
+      toast.error(e?.response?.data?.msg || 'Не удалось удалить запись', { id });
+    }
   };
 
-  const hideTooltip = () => {
-    setTooltip({ phone: null, visible: false });
+  const openReschedule = (booking) => {
+    setRescheduleBooking(booking);
+    setRescheduleOpen(true);
+  };
+
+  const handleRescheduled = (updated) => {
+    setBookings((prev) => prev.map((b) => (b.id === updated.id ? { ...b, ...updated } : b)));
   };
 
   const renderContent = () => {
@@ -113,47 +192,81 @@ const BookingsTab = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200/70">
             {bookings.map((booking) => (
-              <tr key={booking.id} className="hover:bg-gray-50/70 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">{booking.clientName}</td>
+              <tr
+                key={booking.id}
+                ref={(el) => { rowRefs.current[booking.id] = el; }}
+                className={`group transition-colors ${highlightId === booking.id ? 'ring-2 ring-brand-accent bg-brand-light-accent/20' : 'hover:bg-gray-50/70'}`}
+              >
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-text">
+                  <button
+                    onClick={() => handleDelete(booking)}
+                    title="Удалить запись"
+                    className="inline-flex items-center justify-center mr-2 text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => openReschedule(booking)}
+                    title="Перезаписать клиента"
+                    className="inline-flex items-center justify-center mr-2 text-brand-accent hover:text-brand-accent/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <FiCalendar className="w-4 h-4" />
+                  </button>
+                  {booking.clientName}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
                   {new Date(booking.slotTime).toLocaleString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary relative">
-                  <span
-                    onMouseEnter={() => showTooltip(booking.clientPhone)}
-                    onMouseLeave={hideTooltip}
-                    className="cursor-pointer"
-                  >
-                    {lookupCache[booking.clientPhone]?.username ? (
-                      <a href={`tg://resolve?domain=${lookupCache[booking.clientPhone].username}`}>{booking.clientPhone}</a>
-                    ) : (
-                      booking.clientPhone
-                    )}
-                  </span>
-                  {tooltip.visible && tooltip.phone === booking.clientPhone && lookupCache[booking.clientPhone] && (
-                    <div className="absolute left-full ml-2 top-0 bg-white border rounded shadow-lg p-2 flex items-center space-x-2 z-10">
-                      {lookupCache[booking.clientPhone].avatar && (
-                        <img
-                          src={`data:image/jpeg;base64,${lookupCache[booking.clientPhone].avatar}`}
-                          alt="avatar"
-                          className="w-8 h-8 rounded-full"
-                        />
-                      )}
-                      <span className="text-xs">{lookupCache[booking.clientPhone].username || 'No username'}</span>
-                    </div>
-                  )}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
+                  <div className="inline-flex items-center space-x-2">
+                    <FiPhone className="w-4 h-4 text-gray-500" />
+                    <span>{booking.clientPhone || '-'}</span>
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
-                  {booking.clientTelegram ? (
-                    <a href={"https://t.me/" + booking.clientTelegram} target="_blank" rel="noopener noreferrer">
-                      {booking.clientTelegram}
-                    </a>
-                  ) : (
-                    '-'
-                  )}
+                  {(() => {
+                    const handle = (booking.telegramUsername || booking.clientTelegram || '').replace(/^@/, '');
+                    if (booking.telegramFound && handle) {
+                      return (
+                        <span className="inline-flex items-center space-x-2">
+                          <SiTelegram className="w-4 h-4 text-blue-500" />
+                          <a
+                            href={`https://t.me/${handle}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-brand-accent hover:underline"
+                          >
+                            @{handle}
+                          </a>
+                          <FiCheck className="w-4 h-4 text-green-500" />
+                        </span>
+                      );
+                    }
+                    if (handle) {
+                      return (
+                        <span className="inline-flex items-center space-x-2">
+                          <SiTelegram className="w-4 h-4 text-gray-400" />
+                          <a
+                            href={`https://t.me/${handle}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-brand-accent hover:underline"
+                          >
+                            @{handle}
+                          </a>
+                        </span>
+                      );
+                    }
+                    return '-';
+                  })()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <StatusBadge status={booking.status} />
+                  <StatusBadge 
+                    status={booking.status} 
+                    clientConfirmation={booking.clientConfirmation}
+                    onSendConfirmationRequest={handleSendConfirmationRequest}
+                    bookingId={booking.id}
+                  />
                 </td>
               </tr>
             ))}
@@ -171,6 +284,12 @@ const BookingsTab = () => {
       <div>
         {renderContent()}
       </div>
+      <RescheduleModal
+        isOpen={rescheduleOpen}
+        booking={rescheduleBooking}
+        onClose={() => setRescheduleOpen(false)}
+        onRescheduled={handleRescheduled}
+      />
     </div>
   );
 };

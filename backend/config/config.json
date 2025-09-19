@@ -1,6 +1,6 @@
 {
   "development": {
-    "url": "postgres://user:password@db:5432/psybooking",
+    "use_env_variable": "DATABASE_URL",
     "dialect": "postgres"
   },
   "test": {

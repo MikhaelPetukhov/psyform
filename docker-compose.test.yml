@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db_test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: psybooking_test
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d psybooking_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend_test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    depends_on:
+      db_test:
+        condition: service_healthy
+    environment:
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-testing
+      USE_PG_IN_TEST: 'true'
+      DB_NAME: psybooking_test
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_HOST: db_test
+      DB_PORT: 5432
+      DATABASE_URL: postgres://user:password@db_test:5432/psybooking_test
+      TIMEZONE: Europe/Moscow
+      TELEGRAM_DISABLED: true
+      WHATSAPP_DISABLED: true
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        npx sequelize-cli db:migrate --config config/config.js &&
+        echo 'Running tests...' &&
+        npm test
+      "
+
+volumes:
+  test_db_data:

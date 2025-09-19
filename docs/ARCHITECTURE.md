@@ -10,7 +10,7 @@
                               ▼
                     ┌─────────────────┐
                     │  Notifications  │
-                    │ (Email/Telegram)│
+                    │   (Telegram)    │
                     └─────────────────┘
 ```
 
@@ -48,7 +48,6 @@ backend/
 │   │   └── auth.js
 │   ├── models/
 │   ├── services/
-│   │   ├── emailService.js
 │   │   └── telegramService.js
 │   ├── middleware/
 │   └── utils/
@@ -72,7 +71,6 @@ POST /api/admin/login       - Авторизация админа
 bookings (
   id SERIAL PRIMARY KEY,
   client_name VARCHAR(100),
-  client_email VARCHAR(100),
   client_phone VARCHAR(20),
   appointment_date DATE,
   appointment_time TIME,
@@ -101,11 +99,6 @@ blocked_slots (
 ```
 
 ## Система уведомлений
-### Email Service:
-- **Nodemailer** для отправки email
-- **Gmail SMTP** или **SendGrid**
-- Шаблоны писем в HTML
-
 ### Telegram Service:
 - **Telegram Bot API**
 - Мгновенные уведомления психологу

@@ -1,6 +1,6 @@
 {
   "name": "psybooking",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Modern booking system for psychologist appointments",
   "main": "index.js",
   "scripts": {

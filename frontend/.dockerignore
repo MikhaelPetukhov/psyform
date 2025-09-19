@@ -1,0 +1,25 @@
+# Frontend Docker build context optimizations
+node_modules
+build
+npm-debug.log
+yarn.lock
+
+# VCS
+.git
+.gitignore
+
+# Env and temp
+.env
+*.log
+logs/
+coverage/
+.tmp/
+tmp/
+
+# OS/editor junk
+.DS_Store
+*.swp
+
+# Docker files themselves
+Dockerfile
+.dockerignore

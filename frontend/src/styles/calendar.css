@@ -17,6 +17,8 @@
   .calendar-contain {
     margin: auto;
     top: 5%;
+    /* Sidebar width variable used by both the sidebar and the slide-out menu anchor */
+    --sidebar-width: 30%;
   }
 }
 
@@ -249,7 +251,7 @@
   .calendar__sidebar {
     position: absolute;
     height: 100%;
-    width: 30%;
+    width: var(--sidebar-width, 30%);
     float: left;
     margin-bottom: 0;
   }
@@ -290,6 +292,34 @@
   font-weight: 100;
   font-size: 1rem;
 }
+
+/* Status-based coloring for events */
+.sidebar__list-item.status-confirmed {
+  border-left: 3px solid #22c55e; /* green-500 */
+  padding-left: 8px;
+}
+.sidebar__list-item.status-cancelled {
+  border-left: 3px solid #ef4444; /* red-500 */
+  padding-left: 8px;
+  opacity: 0.9;
+}
+.sidebar__list-item.status-completed {
+  border-left: 3px solid #3b82f6; /* blue-500 */
+  padding-left: 8px;
+  color: #6b7280; /* gray-500 */
+}
+
+/* Contact method icons */
+.contact-icon {
+  margin: 0 6px 0 6px;
+  font-size: 0.95em;
+  vertical-align: -2px;
+}
+.contact-icon.tg { color: #229ED9; }
+.contact-icon.wa { color: #25D366; }
+.contact-icon.ph { color: #6b7280; }
+
+.list-item__title { margin-left: 4px; }
 
 .list-item__time {
   display: inline-block;
@@ -362,6 +392,7 @@
 .calendar__week {
   display: flex;
   flex: 1 1 0;
+  align-items: stretch;
 }
 
 .calendar__day {
@@ -392,10 +423,23 @@
   color: #fd588a;
 }
 
+/* Past days (within current month) */
+.calendar__day.past .calendar__date {
+  color: #a1a1aa; /* gray-400 */
+}
+.calendar__day.past .calendar__task {
+  color: #9ca3af; /* gray-400/500 */
+}
+.calendar__day.past {
+  opacity: 0.95;
+}
+
 .calendar__task {
   color: #040605;
   display: flex;
   font-size: 0.8rem;
+  height: 1.2em;
+  line-height: 1.2em;
 }
 @media screen and (min-width: 55em) {
   .calendar__task {
@@ -405,28 +449,51 @@
 .calendar__task.calendar__task--today {
   color: #fd588a;
 }
+.calendar__task--empty {
+  visibility: hidden;
+}
+
+/* Moscow clock in the title bar */
+.msk-clock {
+  margin-left: 12px;
+  padding: 0 8px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  background: #eef2f5;
+  color: #2d444a;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
 
 .calendar-menu {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 220px;
   height: 100%;
   background: #ffffff;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   transform: translateX(-100%);
-  transition: transform 0.3s ease;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.2s ease;
   pointer-events: none;
+  visibility: hidden;
   z-index: 60;
 }
 
 .menu-open .calendar-menu {
+  left: 0;
   transform: translateX(0);
   pointer-events: auto;
+  opacity: 1;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  visibility: visible;
 }
 
 .menu-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
   opacity: 0;

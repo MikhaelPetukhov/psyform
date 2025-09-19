@@ -1,0 +1,36 @@
+# Backend Docker build context optimizations
+node_modules
+npm-debug.log
+
+# VCS
+.git
+.gitignore
+
+# Env and temp
+.env
+*.log
+logs/
+coverage/
+.tmp/
+tmp/
+
+# Tests (not needed for runtime image)
+__tests__/
+*.test.js
+*.test.mjs
+*.spec.js
+
+# OS/editor junk
+.DS_Store
+*.swp
+
+# Docker files themselves
+Dockerfile
+Dockerfile.test
+.dockerignore
+
+# SQLite/local db artifacts (if any)
+*.sqlite
+*.sqlite3
+sqlite.db
+.sequelize*

@@ -1,5 +1,6 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database');
+module.exports = (sequelize, DataTypes) => {
+const dialect = sequelize.getDialect && sequelize.getDialect();
+const isSqlite = dialect === 'sqlite';
 
 const ScheduleSetting = sequelize.define('ScheduleSetting', {
   id: {
@@ -29,13 +30,14 @@ const ScheduleSetting = sequelize.define('ScheduleSetting', {
     defaultValue: 15,
   },
   // New flexible fields
+  // Use JSON for SQLite (stored as TEXT) and JSONB for Postgres
   workingDays: {
-    type: DataTypes.ARRAY(DataTypes.INTEGER),
+    type: isSqlite ? DataTypes.JSON : DataTypes.JSONB,
     allowNull: false,
     defaultValue: [1, 2, 3, 4, 5],
   },
   workingHours: {
-    type: DataTypes.JSONB,
+    type: isSqlite ? DataTypes.JSON : DataTypes.JSONB,
     allowNull: false,
     defaultValue: { start: '09:00', end: '18:00' },
   },
@@ -55,13 +57,19 @@ const ScheduleSetting = sequelize.define('ScheduleSetting', {
     defaultValue: 30,
   },
   lunchBreak: {
-    type: DataTypes.JSONB,
+    type: isSqlite ? DataTypes.JSON : DataTypes.JSONB,
     allowNull: false,
     defaultValue: { enabled: true, start: '13:00', end: '14:00' },
+  },
+  // Multi-tenant scope
+  practitionerId: {
+    type: DataTypes.UUID,
+    allowNull: true,
   },
 }, {
   tableName: 'ScheduleSettings',
   timestamps: true,
 });
 
-module.exports = ScheduleSetting;
+return ScheduleSetting;
+};

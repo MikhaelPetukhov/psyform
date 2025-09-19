@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Stage 1: Build the React application
 FROM node:18-alpine as build
 
@@ -6,8 +7,9 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Speed up and stabilize install with npm ci and cache
+ENV NODE_OPTIONS=--max-old-space-size=2048
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 # Copy the rest of the application source code
 COPY . .

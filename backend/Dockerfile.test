@@ -1,0 +1,27 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm ci --only=dev
+
+# Copy source code
+COPY . .
+
+# Set test environment
+ENV NODE_ENV=test
+ENV JWT_SECRET=test-secret-key-for-testing
+ENV DB_NAME=psybooking_test
+ENV DB_USER=user
+ENV DB_PASSWORD=password
+ENV DB_HOST=db_test
+ENV DB_PORT=5432
+ENV TIMEZONE=Europe/Moscow
+ENV TELEGRAM_DISABLED=true
+ENV WHATSAPP_DISABLED=true
+
+# Run tests
+CMD ["npm", "test"]

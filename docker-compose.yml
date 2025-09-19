@@ -12,28 +12,117 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: sh -c "npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all && node server.js"
+    command: sh -c "node server.js"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgres://user:password@db:5432/psybooking
-      - JWT_SECRET=your_super_secret_jwt_key_that_is_long_and_random
+      - JWT_SECRET=${JWT_SECRET}
       - NODE_ENV=development
+      - NODE_OPTIONS=--max-old-space-size=1024
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_SESSION=${TELEGRAM_SESSION}
+      - TELEGRAM_ENABLED=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL}
+      - DEFAULT_PRACTITIONER_SLUG=${DEFAULT_PRACTITIONER_SLUG:-mikhael}
+      - SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME}
+      - CORS_ORIGIN=${PUBLIC_WEB_URL}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - TELEGRAM_WEBHOOK_ENABLED=true
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-dev-secret}
+      - POST_LOGIN_REDIRECT=${POST_LOGIN_REDIRECT:-/}
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_REMINDER_SCHEDULER=${ENABLE_REMINDER_SCHEDULER:-false}
+      - ENABLE_CLEANUP_SCHEDULER=${ENABLE_CLEANUP_SCHEDULER:-false}
+      - ENABLE_JOB_WORKERS=false
+    ports:
+      - "5000:5000"
     volumes:
       - ./backend:/usr/src/app
       # Use a named volume for node_modules to prevent it from being overwritten by the host mount.
       - /usr/src/app/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/readiness', r=>process.exit(r.statusCode===200?0:1)).on('error', ()=>process.exit(1))"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "npm run migrate && if [ \"$RUN_SEEDS\" = \"true\" ]; then npm run seed; else echo 'Skipping seeds'; fi"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/psybooking
+      - NODE_ENV=development
+      - RUN_SEEDS=${RUN_SEEDS:-true}
+    profiles: ["migrate"]
 
   db:
     image: postgres:14-alpine
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_DB=psybooking
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d psybooking"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "node worker.js"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@db:5432/psybooking
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL}
+      - CORS_ORIGIN=${PUBLIC_WEB_URL}
+      - TELEGRAM_ENABLED=false
+      - TELEGRAM_WEBHOOK_ENABLED=${TELEGRAM_WEBHOOK_ENABLED:-true}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-dev-secret}
+      - ENABLE_REMINDER_SCHEDULER=${ENABLE_REMINDER_SCHEDULER:-true}
+      - ENABLE_CLEANUP_SCHEDULER=${ENABLE_CLEANUP_SCHEDULER:-true}
+      - ENABLE_JOB_WORKERS=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_SESSION=${TELEGRAM_SESSION}
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    profiles: ["worker"]
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

@@ -5,15 +5,38 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
-// Add a request interceptor to include the token in headers
+// Add a request interceptor to include practitioner headers
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('adminToken');
-    if (token) {
-      config.headers['x-auth-token'] = token;
+    // Tokens are now handled via HttpOnly cookies automatically
+    // Remove localStorage token handling for security
+
+    // Attach practitioner headers for multi-tenant scoping
+    try {
+      // Prefer explicit ID, fallback to slug, then public slug
+      const pId = localStorage.getItem('practitionerId') || (typeof window !== 'undefined' && window.__PRACTITIONER_ID__);
+      const pSlug = localStorage.getItem('practitionerSlug') || (typeof window !== 'undefined' && window.__PRACTITIONER_SLUG__);
+      const pPublicSlug = localStorage.getItem('practitionerPublicSlug') || (typeof window !== 'undefined' && window.__PRACTITIONER_PUBLIC_SLUG__);
+      if (pId) {
+        config.headers['x-practitioner-id'] = pId;
+      }
+      if (pSlug) {
+        config.headers['x-practitioner-slug'] = pSlug;
+      }
+      if (!pId && !pSlug && pPublicSlug) {
+        config.headers['x-practitioner-public-slug'] = pPublicSlug;
+      }
+    } catch (e) {
+      // no-op: do not block request if headers can't be set
     }
+    // Attach client timezone for better UX and correct booking sourceTimezone
+    try {
+      const tz = localStorage.getItem('clientTimezone') || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null);
+      if (tz) config.headers['x-client-timezone'] = tz;
+    } catch (_) { /* ignore */ }
     return config;
   },
   (error) => {

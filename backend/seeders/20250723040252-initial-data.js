@@ -1,5 +1,6 @@
 'use strict';
 const bcrypt = require('bcryptjs');
+const { randomUUID } = require('crypto');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
@@ -13,6 +14,7 @@ module.exports = {
 
     // 2. Create admin user with credentials from env
     await queryInterface.bulkInsert('Users', [{
+      id: randomUUID(),
       username: adminUsername,
       password: hashedPassword,
       createdAt: new Date(),
@@ -28,10 +30,11 @@ module.exports = {
     // 4. Create default settings if they don't exist
     if (settings.length === 0) {
       await queryInterface.bulkInsert('ScheduleSettings', [{
-        workingDays: [1, 2, 3, 4, 5],      // Mon-Fri
+        // JSONB columns must receive JSON, not Postgres ARRAY literal
+        workingDays: JSON.stringify([1, 2, 3, 4, 5]),      // Mon-Fri
         workingHours: JSON.stringify({ start: '09:00', end: '18:00' }),
         sessionDuration: 60,                 // 60 minutes
-        breakBetweenSessions: 15,                // 15 minutes
+        breakBetweenSessions: 15,            // 15 minutes
         generationPeriodDays: 30,
         lunchBreak: JSON.stringify({ enabled: true, start: '13:00', end: '14:00' }),
         createdAt: new Date(),
