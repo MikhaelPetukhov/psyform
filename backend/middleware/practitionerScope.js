@@ -88,6 +88,7 @@ module.exports = async function practitionerScope(req, res, next) {
           } catch (e) {
             logger.warn(`[scope] override resolve error: ${e.message}`);
           }
+
           if (user.practitionerId) {
             // Verify practitioner exists (DB could be reset)
             const exists = await practitionerCache.getById(user.practitionerId);

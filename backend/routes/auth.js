@@ -184,6 +184,26 @@ router.get('/admin/me', authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
+router.post('/admin/logout', (req, res) => {
+  try {
+    const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
+      || process.env.NODE_ENV === 'production';
+    const opts = {
+      httpOnly: true,
+      secure,
+      sameSite: 'none',
+      maxAge: 0,
+      path: '/',
+    };
+    res.cookie('admin_sid', '', opts);
+    res.cookie('sid_admin', '', opts);
+    return res.json({ ok: true });
+  } catch (e) {
+    logger.error(`[AUTH] /admin/logout error: ${e.message}`);
+    return res.status(500).send('Ошибка сервера');
+  }
+});
+
 // --- Compatibility endpoints used by tests: generate and verify codes over HTTP ---
 // POST /api/auth/telegram/generate-code { tgUserId }
 router.post('/telegram/generate-code', async (req, res) => {
@@ -706,7 +726,17 @@ router.post(
       if (!jwtSecret) return res.status(500).json({ msg: 'Server configuration error' });
       const token = jwt.sign(payload, jwtSecret, { expiresIn: '30d' });
 
-      return res.json({ success: true, token, client });
+      const secureClient = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
+        || process.env.NODE_ENV === 'production';
+      res.cookie('client_sid', token, {
+        httpOnly: true,
+        secure: secureClient,
+        sameSite: 'none',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+
+      return res.json({ success: true, client });
     } catch (e) {
       logger.error(`[AUTH] /tg/verify error: ${e.message}`);
       return res.status(500).send('Ошибка сервера');
@@ -731,6 +761,27 @@ router.get('/tg/me', clientAuth, async (req, res) => {
     }
     return res.json({ client });
   } catch (e) {
+    return res.status(500).send('Ошибка сервера');
+  }
+});
+
+// Telegram: logout by expiring HttpOnly cookie
+router.post('/tg/logout', async (req, res) => {
+  try {
+    const secureClient = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
+      || process.env.NODE_ENV === 'production';
+    const cookieOpts = {
+      httpOnly: true,
+      secure: secureClient,
+      sameSite: 'none',
+      maxAge: 0,
+      path: '/',
+    };
+    res.cookie('client_sid', '', cookieOpts);
+    res.cookie('sid', '', cookieOpts);
+    return res.json({ success: true });
+  } catch (e) {
+    logger.error(`[AUTH] /tg/logout error: ${e.message}`);
     return res.status(500).send('Ошибка сервера');
   }
 });

@@ -71,10 +71,6 @@ function TelegramLogin({ onLogin, forceModal = false }) {
     setVerifying(true);
     try {
       const { data } = await api.post('/auth/tg/verify', { code: authCode.trim() });
-      const token = data?.token;
-      if (token) {
-        localStorage.setItem('clientToken', token);
-      }
       setMe(data?.client || null);
       toast.success('Авторизация через Telegram выполнена');
       if (typeof onLogin === 'function') onLogin(data?.client || null);
@@ -110,10 +106,6 @@ function TelegramLogin({ onLogin, forceModal = false }) {
       (async () => {
         try {
           const { data } = await api.post('/auth/tg/verify', { code: codeParam });
-          const token = data?.token;
-          if (token) {
-            localStorage.setItem('clientToken', token);
-          }
           setMe(data?.client || null);
           // Signal BookingForm to auto-open calendar/modal
           try { localStorage.setItem('autoOpenBooking', '1'); } catch (_) {}
@@ -144,8 +136,12 @@ function TelegramLogin({ onLogin, forceModal = false }) {
   }, [onLogin]);
 
 
-  const handleLogout = () => {
-    localStorage.removeItem('clientToken');
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/tg/logout');
+    } catch (err) {
+      console.error('Failed to log out client session', err);
+    }
     setMe(null);
     toast.success('Вы вышли из аккаунта клиента');
     if (typeof onLogin === 'function') onLogin(null);

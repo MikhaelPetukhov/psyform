@@ -96,7 +96,7 @@ describe('Telegram auth flow', () => {
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p1.slug)}`)
         .set('Cookie', cookies)
         .expect(302);
-      expect(second.headers.location).toBe('/');
+      expect(second.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
     });
 
     test('expired token returns 401', async () => {
@@ -122,7 +122,7 @@ describe('Telegram auth flow', () => {
         .get(`/api/auth/magic?t=${encodeURIComponent('totally-wrong')}&p=${encodeURIComponent(p1.slug)}`)
         .set('Cookie', cookies)
         .expect(302);
-      expect(invalid.headers.location).toBe('/');
+      expect(invalid.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
 
       // ensure original record remains used
       const found = await TgAuthCode.findOne({ where: { codeHash: hashCode(code) } });
@@ -155,7 +155,7 @@ describe('Telegram auth flow', () => {
       const res = await request(app)
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}`)
         .expect(302);
-      expect(res.headers.location).toBe('/');
+      expect(res.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
 
       // Client must be created under p1
       const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p1.id } });
@@ -164,7 +164,7 @@ describe('Telegram auth flow', () => {
   });
 
   describe('POST /api/auth/tg/verify', () => {
-    test('successfully verifies one-time code and returns token + client', async () => {
+    test('successfully verifies one-time code and sets cookie + client', async () => {
       const code = 'verify-ok';
       await createCodeRecord({ code, tgPhone: '+70000000006' });
 
@@ -174,9 +174,13 @@ describe('Telegram auth flow', () => {
         .send({ code })
         .expect(200);
 
+      const setCookie = res.headers['set-cookie'];
+      expect(Array.isArray(setCookie)).toBe(true);
+      expect(setCookie.join(';')).toMatch(/client_sid=/);
+
       expect(res.body.success).toBe(true);
-      expect(res.body).toHaveProperty('token');
       expect(res.body).toHaveProperty('client');
+      expect(res.body).not.toHaveProperty('token');
 
       const rec = await TgAuthCode.findOne({ where: { codeHash: hashCode(code) } });
       expect(rec.usedAt).not.toBeNull();
@@ -249,6 +253,30 @@ describe('Telegram auth flow', () => {
 
       const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p1.id } });
       expect(client).toBeTruthy();
+    });
+  });
+
+  describe('POST /api/auth/tg/logout', () => {
+    test('clears client_sid cookie', async () => {
+      const payload = {
+        client: {
+          id: 'c-logout',
+          tgUserId: 'tg-logout',
+          practitionerId: p1.id,
+        },
+      };
+      const token = jwt.sign(payload, process.env.JWT_SECRET || 'test-secret', { expiresIn: '1h' });
+      const res = await request(app)
+        .post('/api/auth/tg/logout')
+        .set('Cookie', [`client_sid=${token}`])
+        .expect(200);
+
+      const setCookie = res.headers['set-cookie'];
+      expect(Array.isArray(setCookie)).toBe(true);
+      const combined = setCookie.join(';');
+      expect(combined).toMatch(/client_sid=/);
+      expect(combined).toMatch(/Max-Age=0/i);
+      expect(res.body.success).toBe(true);
     });
   });
 });

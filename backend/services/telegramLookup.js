@@ -1,5 +1,6 @@
 const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
+const logger = require('../config/logger');
 
 const isTest = process.env.NODE_ENV === 'test';
 const apiIdRaw = process.env.TELEGRAM_API_ID;
