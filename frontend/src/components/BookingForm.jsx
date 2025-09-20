@@ -177,7 +177,6 @@ const BookingForm = () => {
 
     try {
       const normalizedPhone = normalizePhoneForSubmit(data.phone || '');
-      const clientToken = localStorage.getItem('clientToken');
       await api.post('/bookings', {
         name: data.name,
         phone: normalizedPhone,
@@ -185,7 +184,7 @@ const BookingForm = () => {
         preferredContact: data.preferredContact,
         comment: data.comment,
         slotId: selectedSlot.id,
-      }, clientToken ? { headers: { 'x-auth-token': clientToken } } : undefined);
+      });
 
       toast.success('Вы успешно записаны! Подтверждение отправлено в Telegram (если вы вошли). Ссылка на видеосессию придёт ближе к началу.', { id: toastId, duration: 8000 });
       reset();
