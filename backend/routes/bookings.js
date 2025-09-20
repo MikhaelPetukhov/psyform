@@ -7,7 +7,7 @@ const logger = require('../config/logger');
 const authMiddleware = require('../middleware/authMiddleware');
 const adminOnly = require('../middleware/adminOnly');
 const clientAuthMiddleware = require('../middleware/clientAuthMiddleware');
-const { notifyNewShortNoticeBooking, notifyPractitionerNewBooking, notifyBookingCreated } = require('../services/telegramBot');
+const { notifyNewShortNoticeBooking, notifyPractitionerNewBooking, notifyBookingCreated, sendRescheduleNotification } = require('../services/telegramBot');
 const { enqueueTelegramNotification } = require('../services/jobQueue');
 const { parseTimeInput, formatSlotTime } = require('../utils/timezone');
 const sequelize = require('../config/database');
@@ -477,15 +477,25 @@ router.patch('/:id/reschedule', authMiddleware, adminOnly, async (req, res) => {
   if (!slotId && (!slotTime || !endTime)) {
     return res.status(400).json({ msg: 'Нужно передать либо slotId, либо slotTime и endTime' });
   }
+
   const t = await sequelize.transaction();
   try {
     const where = { id };
     if (req.practitionerId) where.practitionerId = req.practitionerId;
-    const booking = await Booking.findOne({ where, transaction: t });
+    const booking = await Booking.findOne({
+      where,
+      transaction: t,
+      include: [{ model: Client, as: 'client' }],
+    });
     if (!booking) {
       await t.rollback();
       return res.status(404).json({ msg: 'Запись не найдена' });
     }
+
+    const oldSlotId = booking.AvailableSlotId ? String(booking.AvailableSlotId) : null;
+    const oldStart = booking.slotTime ? new Date(booking.slotTime) : null;
+    const oldEnd = booking.endTime ? new Date(booking.endTime) : null;
+    const effectivePractitionerId = req.practitionerId || booking.practitionerId || null;
 
     let newSlot = null;
     let start = null;
@@ -497,11 +507,11 @@ router.patch('/:id/reschedule', authMiddleware, adminOnly, async (req, res) => {
         await t.rollback();
         return res.status(400).json({ msg: 'Слот не найден' });
       }
-      if (req.practitionerId && String(newSlot.practitionerId) !== String(req.practitionerId)) {
+      if (effectivePractitionerId && String(newSlot.practitionerId) !== String(effectivePractitionerId)) {
         await t.rollback();
         return res.status(403).json({ msg: 'Нельзя использовать слот другого психолога' });
       }
-      if (newSlot.isBooked && String(newSlot.id) !== String(booking.AvailableSlotId)) {
+      if (newSlot.isBooked && (!oldSlotId || String(newSlot.id) !== oldSlotId)) {
         await t.rollback();
         return res.status(400).json({ msg: 'Слот уже забронирован' });
       }
@@ -514,44 +524,60 @@ router.patch('/:id/reschedule', authMiddleware, adminOnly, async (req, res) => {
         await t.rollback();
         return res.status(400).json({ msg: 'Некорректные дата/время' });
       }
+
       const slotWhere = { slotTime: start, endTime: end };
-      if (req.practitionerId) slotWhere.practitionerId = req.practitionerId;
+      if (effectivePractitionerId) slotWhere.practitionerId = effectivePractitionerId;
       newSlot = await AvailableSlot.findOne({ where: slotWhere, transaction: t });
       if (!newSlot) {
-        newSlot = await AvailableSlot.create({ slotTime: start, endTime: end, isBooked: false, practitionerId: req.practitionerId || null }, { transaction: t });
+        newSlot = await AvailableSlot.create(
+          { slotTime: start, endTime: end, isBooked: false, practitionerId: effectivePractitionerId },
+          { transaction: t }
+        );
       }
-      if (newSlot.isBooked && String(newSlot.id) !== String(booking.AvailableSlotId)) {
+      if (newSlot.isBooked && (!oldSlotId || String(newSlot.id) !== oldSlotId)) {
         await t.rollback();
         return res.status(400).json({ msg: 'Слот уже забронирован' });
       }
     }
 
-    // Free old slot if exists and different
-    if (booking.AvailableSlotId && String(booking.AvailableSlotId) !== String(newSlot.id)) {
-      const oldSlot = await AvailableSlot.findByPk(booking.AvailableSlotId, { transaction: t });
+    if (oldSlotId && oldSlotId !== String(newSlot.id)) {
+      const oldSlot = await AvailableSlot.findByPk(oldSlotId, { transaction: t });
       if (oldSlot) {
         oldSlot.isBooked = false;
         await oldSlot.save({ transaction: t });
       }
     }
 
-    // Assign new slot
     newSlot.isBooked = true;
     await newSlot.save({ transaction: t });
 
-    await booking.update({
-      slotTime: start,
-      endTime: end,
-      AvailableSlotId: newSlot.id,
-      clientConfirmation: 'pending',
-      reminderSentAt: null,
-      reminder24hSentAt: null,
-      reminder1hSentAt: null,
-    }, { transaction: t });
+    await booking.update(
+      {
+        slotTime: start,
+        endTime: end,
+        AvailableSlotId: newSlot.id,
+        clientConfirmation: 'pending',
+        reminderSentAt: null,
+        reminder24hSentAt: null,
+        reminder1hSentAt: null,
+      },
+      { transaction: t }
+    );
 
     await t.commit();
 
-    // Notify client to confirm new time and notify practitioner
+    try {
+      await booking.reload({ include: [{ model: Client, as: 'client' }] });
+    } catch (_) { /* ignore reload errors */ }
+
+    if (oldStart && oldEnd && booking.client && (booking.client.tgUserId || booking.client.tgChatId)) {
+      try {
+        await sendRescheduleNotification(booking, oldStart, oldEnd);
+      } catch (notifyErr) {
+        try { logger.warn(`Failed to send reschedule notification for booking ${booking.id}: ${notifyErr.message}`); } catch (_) {}
+      }
+    }
+
     try { await notifyNewShortNoticeBooking(booking); } catch (_) {}
     try { await notifyPractitionerNewBooking(booking); } catch (_) {}
 
@@ -687,100 +713,6 @@ router.post('/:id/send-confirmation', authMiddleware, adminOnly, async (req, res
   } catch (e) {
     logger.error('Error sending confirmation request:', e);
     return res.status(500).json({ msg: 'Ошибка при отправке запроса' });
-  }
-});
-
-// @route   PATCH api/bookings/:id/reschedule
-// @desc    Reschedule booking to a new slot with client notification
-// @access  Private (Admin only)
-router.patch('/:id/reschedule', authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const bookingId = req.params.id;
-    const practitionerId = req.practitionerId;
-    const { slotId } = req.body;
-
-    if (!slotId) {
-      return res.status(400).json({ msg: 'Не указан новый слот (slotId)' });
-    }
-
-    const booking = await Booking.findOne({
-      where: { 
-        id: bookingId,
-        practitionerId: practitionerId 
-      },
-      include: [{ model: Client, as: 'client' }]
-    });
-
-    if (!booking) {
-      logger.warn(`Booking not found: ${bookingId} for practitioner ${practitionerId}`);
-      return res.status(404).json({ msg: 'Запись не найдена' });
-    }
-
-    // Find and validate the new slot
-    const newSlot = await AvailableSlot.findOne({
-      where: {
-        id: slotId,
-        practitionerId: practitionerId,
-        isBooked: false
-      }
-    });
-
-    if (!newSlot) {
-      return res.status(400).json({ msg: 'Выбранный слот недоступен' });
-    }
-
-    const oldStart = booking.slotTime;
-    const oldEnd = booking.endTime;
-
-    // Update booking with new times
-    await booking.update({
-      slotTime: newSlot.slotTime,
-      endTime: newSlot.endTime,
-      AvailableSlotId: newSlot.id
-    });
-
-    // Mark new slot as booked
-    await newSlot.update({ isBooked: true });
-
-    // Free up old slot if it exists
-    if (booking.AvailableSlotId && booking.AvailableSlotId !== slotId) {
-      try {
-        await AvailableSlot.update(
-          { isBooked: false },
-          { where: { id: booking.AvailableSlotId, practitionerId: practitionerId } }
-        );
-      } catch (e) {
-        logger.warn(`Could not free old slot ${booking.AvailableSlotId}: ${e.message}`);
-      }
-    }
-
-    // Send notification to client if they have telegram
-    if (booking.client && (booking.client.tgUserId || booking.client.tgChatId)) {
-      try {
-        const { sendRescheduleNotification } = require('../services/telegramBot');
-        await sendRescheduleNotification(booking, oldStart, oldEnd);
-        logger.info(`Reschedule notification sent for booking ${bookingId}`);
-      } catch (e) {
-        logger.warn(`Failed to send reschedule notification for booking ${bookingId}: ${e.message}`);
-      }
-    }
-
-    logger.info(`Booking ${bookingId} rescheduled from ${oldStart} to ${newSlot.slotTime}`);
-
-    return res.json({
-      ok: true,
-      msg: 'Запись успешно перенесена',
-      booking: {
-        id: booking.id,
-        slotTime: booking.slotTime,
-        endTime: booking.endTime,
-        clientName: booking.clientName
-      }
-    });
-
-  } catch (e) {
-    logger.error('Error rescheduling booking:', e);
-    return res.status(500).json({ msg: 'Ошибка при переносе записи' });
   }
 });
 

@@ -56,37 +56,39 @@ module.exports = async function practitionerScope(req, res, next) {
         const decoded = jwt.verify(token, jwtSecret);
         const user = decoded && decoded.user;
         if (user && ['admin', 'super_admin'].includes(user.role)) {
-          // Public override via headers: if user is on public form and explicitly provided
-          // tenant headers, prefer them over admin token for this request only.
-          try {
-            const hdrId = req.header('x-practitioner-id');
-            const hdrSlug = req.header('x-practitioner-slug');
-            const hdrPublic = req.header('x-practitioner-public-slug');
-            let overrideId = null;
-            if (hdrId) {
-              const idVal = String(hdrId).trim();
-              const exists = await practitionerCache.getById(idVal);
-              overrideId = exists ? exists.id : null;
-              if (overrideId) {
-                logger.debug(`[scope] override via header x-practitioner-id=${hdrId} -> ${overrideId} (admin present)`);
-              } else {
-                logger.warn(`[scope] override via header x-practitioner-id=${hdrId} not found`);
+          if (!user.practitionerId) {
+            // Public override via headers: if user is on public form and explicitly provided
+            // tenant headers, prefer them over admin token for this request only.
+            try {
+              const hdrId = req.header('x-practitioner-id');
+              const hdrSlug = req.header('x-practitioner-slug');
+              const hdrPublic = req.header('x-practitioner-public-slug');
+              let overrideId = null;
+              if (hdrId) {
+                const idVal = String(hdrId).trim();
+                const exists = await practitionerCache.getById(idVal);
+                overrideId = exists ? exists.id : null;
+                if (overrideId) {
+                  logger.debug(`[scope] override via header x-practitioner-id=${hdrId} -> ${overrideId} (admin present)`);
+                } else {
+                  logger.warn(`[scope] override via header x-practitioner-id=${hdrId} not found`);
+                }
+              } else if (hdrSlug) {
+                const p = await practitionerCache.getBySlug(String(hdrSlug).trim());
+                overrideId = p ? p.id : null;
+                logger.debug(`[scope] override via header x-practitioner-slug=${hdrSlug} -> ${overrideId} (admin present)`);
+              } else if (hdrPublic) {
+                const p = await practitionerCache.getByPublicSlug(String(hdrPublic).trim());
+                overrideId = p ? p.id : null;
+                logger.debug(`[scope] override via header x-practitioner-public-slug=${hdrPublic} -> ${overrideId} (admin present)`);
               }
-            } else if (hdrSlug) {
-              const p = await practitionerCache.getBySlug(String(hdrSlug).trim());
-              overrideId = p ? p.id : null;
-              logger.debug(`[scope] override via header x-practitioner-slug=${hdrSlug} -> ${overrideId} (admin present)`);
-            } else if (hdrPublic) {
-              const p = await practitionerCache.getByPublicSlug(String(hdrPublic).trim());
-              overrideId = p ? p.id : null;
-              logger.debug(`[scope] override via header x-practitioner-public-slug=${hdrPublic} -> ${overrideId} (admin present)`);
+              if (overrideId) {
+                req.practitionerId = overrideId;
+                return next();
+              }
+            } catch (e) {
+              logger.warn(`[scope] override resolve error: ${e.message}`);
             }
-            if (overrideId) {
-              req.practitionerId = overrideId;
-              return next();
-            }
-          } catch (e) {
-            logger.warn(`[scope] override resolve error: ${e.message}`);
           }
 
           if (user.practitionerId) {
