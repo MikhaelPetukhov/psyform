@@ -58,30 +58,6 @@ module.exports = async function practitionerScope(req, res, next) {
         if (user && ['admin', 'super_admin'].includes(user.role)) {
           // Public override via headers: if user is on public form and explicitly provided
           // tenant headers, prefer them over admin token for this request only.
-          try {
-            const hdrId = req.header('x-practitioner-id');
-            const hdrSlug = req.header('x-practitioner-slug');
-            const hdrPublic = req.header('x-practitioner-public-slug');
-            let overrideId = null;
-            if (hdrId) {
-              overrideId = hdrId;
-              logger.info(`[scope] override via header x-practitioner-id=${hdrId} (admin present)`);
-            } else if (hdrSlug) {
-              const p = await Practitioner.findOne({ where: { slug: String(hdrSlug).trim() } });
-              overrideId = p ? p.id : null;
-              logger.info(`[scope] override via header x-practitioner-slug=${hdrSlug} -> ${overrideId} (admin present)`);
-            } else if (hdrPublic) {
-              const p = await Practitioner.findOne({ where: { publicSlug: String(hdrPublic).trim() } });
-              overrideId = p ? p.id : null;
-              logger.info(`[scope] override via header x-practitioner-public-slug=${hdrPublic} -> ${overrideId} (admin present)`);
-            }
-            if (overrideId) {
-              req.practitionerId = overrideId;
-              return next();
-            }
-          } catch (e) {
-            logger.warn(`[scope] override resolve error: ${e.message}`);
-          }
           if (user.practitionerId) {
             // Verify practitioner exists (DB could be reset)
             const exists = await Practitioner.findByPk(user.practitionerId);

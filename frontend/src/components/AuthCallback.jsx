@@ -22,11 +22,7 @@ function AuthCallback() {
           setLoading(false);
           return;
         }
-        const { data } = await api.post('/auth/tg/verify', { code: token });
-        const clientToken = data?.token;
-        if (clientToken) {
-          try { localStorage.setItem('clientToken', clientToken); } catch (_) {}
-        }
+        await api.post('/auth/tg/verify', { code: token });
         // Signal BookingForm to auto-open calendar/modal after redirect
         try { localStorage.setItem('autoOpenBooking', '1'); } catch (_) {}
         toast.success('Вход выполнен');
