@@ -1,6 +1,6 @@
 'use strict';
 
-const { Practitioner } = require('../models');
+const practitionerCache = require('../utils/practitionerCache');
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
 
@@ -32,7 +32,7 @@ module.exports = async function practitionerScope(req, res, next) {
               if (decoded && decoded.client && decoded.client.practitionerId) {
                 req.practitionerId = decoded.client.practitionerId;
                 req.user = { id: decoded.client.id, role: 'client', practitionerId: decoded.client.practitionerId };
-                logger.info(`[scope] client token bound to practitionerId=${req.practitionerId} for ${req.method} ${req.originalUrl}`);
+                logger.debug(`[scope] client token bound to practitionerId=${req.practitionerId} for ${req.method} ${req.originalUrl}`);
                 return next();
               }
             } catch (_) { /* ignore invalid client token */ }
@@ -64,16 +64,22 @@ module.exports = async function practitionerScope(req, res, next) {
             const hdrPublic = req.header('x-practitioner-public-slug');
             let overrideId = null;
             if (hdrId) {
-              overrideId = hdrId;
-              logger.info(`[scope] override via header x-practitioner-id=${hdrId} (admin present)`);
+              const idVal = String(hdrId).trim();
+              const exists = await practitionerCache.getById(idVal);
+              overrideId = exists ? exists.id : null;
+              if (overrideId) {
+                logger.debug(`[scope] override via header x-practitioner-id=${hdrId} -> ${overrideId} (admin present)`);
+              } else {
+                logger.warn(`[scope] override via header x-practitioner-id=${hdrId} not found`);
+              }
             } else if (hdrSlug) {
-              const p = await Practitioner.findOne({ where: { slug: String(hdrSlug).trim() } });
+              const p = await practitionerCache.getBySlug(String(hdrSlug).trim());
               overrideId = p ? p.id : null;
-              logger.info(`[scope] override via header x-practitioner-slug=${hdrSlug} -> ${overrideId} (admin present)`);
+              logger.debug(`[scope] override via header x-practitioner-slug=${hdrSlug} -> ${overrideId} (admin present)`);
             } else if (hdrPublic) {
-              const p = await Practitioner.findOne({ where: { publicSlug: String(hdrPublic).trim() } });
+              const p = await practitionerCache.getByPublicSlug(String(hdrPublic).trim());
               overrideId = p ? p.id : null;
-              logger.info(`[scope] override via header x-practitioner-public-slug=${hdrPublic} -> ${overrideId} (admin present)`);
+              logger.debug(`[scope] override via header x-practitioner-public-slug=${hdrPublic} -> ${overrideId} (admin present)`);
             }
             if (overrideId) {
               req.practitionerId = overrideId;
@@ -84,10 +90,10 @@ module.exports = async function practitionerScope(req, res, next) {
           }
           if (user.practitionerId) {
             // Verify practitioner exists (DB could be reset)
-            const exists = await Practitioner.findByPk(user.practitionerId);
+            const exists = await practitionerCache.getById(user.practitionerId);
             if (exists) {
               req.practitionerId = user.practitionerId;
-              logger.info(`[scope] admin token bound to practitionerId=${user.practitionerId} for ${req.method} ${req.originalUrl}`);
+              logger.debug(`[scope] admin token bound to practitionerId=${user.practitionerId} for ${req.method} ${req.originalUrl}`);
             } else {
               req.practitionerId = null;
               req.__adminMissingTenant = true;
@@ -106,16 +112,22 @@ module.exports = async function practitionerScope(req, res, next) {
             let fallbackId = null;
             try {
               if (hdrId) {
-                fallbackId = hdrId;
-                logger.info(`[scope] (admin fallback) x-practitioner-id=${hdrId}`);
+                const idVal = String(hdrId).trim();
+                const exists = await practitionerCache.getById(idVal);
+                fallbackId = exists ? exists.id : null;
+                if (fallbackId) {
+                  logger.debug(`[scope] (admin fallback) x-practitioner-id=${hdrId} -> ${fallbackId}`);
+                } else {
+                  logger.warn(`[scope] (admin fallback) x-practitioner-id=${hdrId} not found`);
+                }
               } else if (hdrSlug) {
-                const p = await Practitioner.findOne({ where: { slug: String(hdrSlug).trim() } });
+                const p = await practitionerCache.getBySlug(String(hdrSlug).trim());
                 fallbackId = p ? p.id : null;
-                logger.info(`[scope] (admin fallback) x-practitioner-slug=${hdrSlug} -> ${fallbackId}`);
+                logger.debug(`[scope] (admin fallback) x-practitioner-slug=${hdrSlug} -> ${fallbackId}`);
               } else if (hdrPublic) {
-                const p = await Practitioner.findOne({ where: { publicSlug: String(hdrPublic).trim() } });
+                const p = await practitionerCache.getByPublicSlug(String(hdrPublic).trim());
                 fallbackId = p ? p.id : null;
-                logger.info(`[scope] (admin fallback) x-practitioner-public-slug=${hdrPublic} -> ${fallbackId}`);
+                logger.debug(`[scope] (admin fallback) x-practitioner-public-slug=${hdrPublic} -> ${fallbackId}`);
               }
             } catch (e) {
               logger.error(`[scope] (admin fallback) header resolve error: ${e.message}`);
@@ -138,50 +150,50 @@ module.exports = async function practitionerScope(req, res, next) {
 
     if (hdrId) {
       practitionerId = hdrId;
-      logger.info(`[scope] resolved via x-practitioner-id=${hdrId} for ${req.method} ${req.originalUrl}`);
+      logger.debug(`[scope] resolved via x-practitioner-id=${hdrId} for ${req.method} ${req.originalUrl}`);
     } else if (hdrSlug) {
       const val = String(hdrSlug).trim();
-      let p = await Practitioner.findOne({ where: { slug: val } });
+      let p = await practitionerCache.getBySlug(val);
       if (!p) {
         // Фолбэк: если не нашли по slug, попробуем publicSlug тем же значением
-        p = await Practitioner.findOne({ where: { publicSlug: val } });
+        p = await practitionerCache.getByPublicSlug(val);
         if (p) {
-          logger.info(`[scope] resolved via x-practitioner-slug=${val} (fallback to publicSlug) -> ${p.id} for ${req.method} ${req.originalUrl}`);
+          logger.debug(`[scope] resolved via x-practitioner-slug=${val} (fallback to publicSlug) -> ${p.id} for ${req.method} ${req.originalUrl}`);
         }
       }
       practitionerId = p ? p.id : null;
       if (p) {
-        logger.info(`[scope] resolved via x-practitioner-slug=${val} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
+        logger.debug(`[scope] resolved via x-practitioner-slug=${val} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
       } else {
         logger.warn(`[scope] x-practitioner-slug=${val} not found as slug or publicSlug`);
       }
     } else if (hdrPublic) {
       const val = String(hdrPublic).trim();
-      let p = await Practitioner.findOne({ where: { publicSlug: val } });
+      let p = await practitionerCache.getByPublicSlug(val);
       if (!p) {
         // Фолбэк: если не нашли по publicSlug, пробуем обычный slug
-        p = await Practitioner.findOne({ where: { slug: val } });
+        p = await practitionerCache.getBySlug(val);
         if (p) {
-          logger.info(`[scope] resolved via x-practitioner-public-slug=${val} (fallback to slug) -> ${p.id} for ${req.method} ${req.originalUrl}`);
+          logger.debug(`[scope] resolved via x-practitioner-public-slug=${val} (fallback to slug) -> ${p.id} for ${req.method} ${req.originalUrl}`);
         }
       }
       practitionerId = p ? p.id : null;
       if (p) {
-        logger.info(`[scope] resolved via x-practitioner-public-slug=${val} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
+        logger.debug(`[scope] resolved via x-practitioner-public-slug=${val} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
       } else {
         logger.warn(`[scope] x-practitioner-public-slug=${val} not found as publicSlug or slug`);
       }
     } else if (req.user && req.user.practitionerId) {
       // For client tokens decoded by other middleware
       practitionerId = req.user.practitionerId;
-      logger.info(`[scope] resolved via client token practitionerId=${practitionerId} for ${req.method} ${req.originalUrl}`);
+      logger.debug(`[scope] resolved via client token practitionerId=${practitionerId} for ${req.method} ${req.originalUrl}`);
     } else if (process.env.DEFAULT_PRACTITIONER_ID) {
       practitionerId = process.env.DEFAULT_PRACTITIONER_ID;
-      logger.info(`[scope] resolved via DEFAULT_PRACTITIONER_ID=${practitionerId} for ${req.method} ${req.originalUrl}`);
+      logger.debug(`[scope] resolved via DEFAULT_PRACTITIONER_ID=${practitionerId} for ${req.method} ${req.originalUrl}`);
     } else if (process.env.DEFAULT_PRACTITIONER_SLUG) {
-      const p = await Practitioner.findOne({ where: { slug: String(process.env.DEFAULT_PRACTITIONER_SLUG).trim() } });
+      const p = await practitionerCache.getBySlug(String(process.env.DEFAULT_PRACTITIONER_SLUG).trim());
       practitionerId = p ? p.id : null;
-      logger.info(`[scope] resolved via DEFAULT_PRACTITIONER_SLUG=${process.env.DEFAULT_PRACTITIONER_SLUG} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
+      logger.debug(`[scope] resolved via DEFAULT_PRACTITIONER_SLUG=${process.env.DEFAULT_PRACTITIONER_SLUG} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
     }
 
     req.practitionerId = practitionerId || null;
