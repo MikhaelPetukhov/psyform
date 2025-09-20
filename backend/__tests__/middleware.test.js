@@ -2,9 +2,13 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const originalPractitionerCacheTtl = process.env.PRACTITIONER_CACHE_TTL_MS;
+process.env.PRACTITIONER_CACHE_TTL_MS = '50';
+
 const authMiddleware = require('../middleware/authMiddleware');
 const clientAuthMiddleware = require('../middleware/clientAuthMiddleware');
 const practitionerScope = require('../middleware/practitionerScope');
+const practitionerCache = require('../utils/practitionerCache');
 const adminOnly = require('../middleware/adminOnly');
 const sequelize = require('../config/database');
 const { Practitioner } = require('../models');
@@ -46,6 +50,19 @@ describe('Middleware Tests', () => {
 
   afterAll(async () => {
     await sequelize.close();
+    if (originalPractitionerCacheTtl === undefined) {
+      delete process.env.PRACTITIONER_CACHE_TTL_MS;
+    } else {
+      process.env.PRACTITIONER_CACHE_TTL_MS = originalPractitionerCacheTtl;
+    }
+  });
+
+  beforeEach(() => {
+    practitionerCache.clearCache();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('practitionerScope middleware', () => {
@@ -99,6 +116,41 @@ describe('Middleware Tests', () => {
         .expect(200);
 
       expect(res.body.practitionerId).toBeNull();
+    });
+
+    test('memoizes slug lookups between requests', async () => {
+      const findOneSpy = jest.spyOn(Practitioner, 'findOne');
+
+      await request(app)
+        .get('/test')
+        .set('x-practitioner-slug', 'middleware-test')
+        .expect(200);
+
+      await request(app)
+        .get('/test')
+        .set('x-practitioner-slug', 'middleware-test')
+        .expect(200);
+
+      expect(findOneSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('re-queries database after cache expiration', async () => {
+      const findOneSpy = jest.spyOn(Practitioner, 'findOne');
+
+      await request(app)
+        .get('/test')
+        .set('x-practitioner-slug', 'middleware-test')
+        .expect(200);
+
+      const initialCalls = findOneSpy.mock.calls.length;
+      await new Promise((resolve) => setTimeout(resolve, practitionerCache._TTL_MS + 20));
+
+      await request(app)
+        .get('/test')
+        .set('x-practitioner-slug', 'middleware-test')
+        .expect(200);
+
+      expect(findOneSpy.mock.calls.length).toBeGreaterThan(initialCalls);
     });
   });
 
