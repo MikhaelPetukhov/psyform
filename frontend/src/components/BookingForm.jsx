@@ -272,16 +272,16 @@ const BookingForm = () => {
             {selectedDate && (
               <div className="mt-6 pt-6 border-t border-gray-200/60">
                 <h3 className="text-base font-semibold text-brand-text mb-4">Доступное время на {format(selectedDate, 'd MMMM', { locale: ru })}:</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
                   {getTimeSlotsForDate(selectedDate).length > 0 ? (
                     getTimeSlotsForDate(selectedDate).map((slot) => (
                       <button
                         key={slot.id}
                         type="button"
                         onClick={() => setSelectedSlot(slot)}
-                        className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 border ${
+                        className={`w-full min-h-12 px-4 py-3 rounded-xl text-base font-semibold transition-all duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
                           selectedSlot?.id === slot.id
-                            ? 'bg-brand-accent text-white border-brand-accent shadow-md'
+                            ? 'bg-brand-accent text-white border-brand-accent shadow-lg ring-2 ring-brand-accent ring-offset-2 ring-offset-white'
                             : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                         }`}
                       >
