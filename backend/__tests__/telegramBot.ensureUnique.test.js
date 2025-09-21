@@ -77,4 +77,23 @@ describe('ensureUniqueAuthCodeForClient()', () => {
       Math.random = originalRandom;
     }
   });
+
+  test('stores practitionerId and avoids reuse across different tenants', async () => {
+    const client = makeClient({ tgUserId: 'tenant-user', tgChatId: 'tenant-chat' });
+    const practitionerA = '11111111-1111-1111-1111-111111111111';
+    const practitionerB = '22222222-2222-2222-2222-222222222222';
+
+    const first = await ensureUniqueAuthCodeForClient(client, '222222', 'client', practitionerA);
+    expect(first.reused).toBe(false);
+    expect(first.record.practitionerId).toBe(practitionerA);
+
+    const second = await ensureUniqueAuthCodeForClient(client, '222222', 'client', practitionerA);
+    expect(second.reused).toBe(true);
+    expect(second.record.practitionerId).toBe(practitionerA);
+
+    const third = await ensureUniqueAuthCodeForClient(client, '222222', 'client', practitionerB);
+    expect(third.reused).toBe(false);
+    expect(third.code).not.toBe('222222');
+    expect(third.record.practitionerId).toBe(practitionerB);
+  });
 });
