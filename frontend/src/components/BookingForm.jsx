@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import Cleave from 'cleave.js/react';
@@ -13,8 +13,9 @@ import { format, isSameDay, startOfDay, parse } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import 'react-day-picker/dist/style.css';
 import { normalizePhoneForSubmit, isValidRuPhone } from '../utils/phoneFormat';
-import { FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
-import { TimeRangeDisplay } from './TimezoneDisplay';
+import { FiCheckCircle } from 'react-icons/fi';
+import { TimeRangeDisplay, SimpleTimeDisplay } from './TimezoneDisplay';
+
 
 const LoadingSpinner = () => (
   <div className="flex flex-col items-center justify-center p-10 bg-brand-background rounded-2xl">
@@ -23,25 +24,91 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const findNextAvailableSlot = (slotsMap = {}) => {
+  const sortedDateKeys = Object.keys(slotsMap).sort();
+
+  for (const dateKey of sortedDateKeys) {
+    const slotsForDate = Array.isArray(slotsMap[dateKey]) ? [...slotsMap[dateKey]] : [];
+    slotsForDate.sort((a, b) => new Date(a.slotTime).getTime() - new Date(b.slotTime).getTime());
+
+    if (slotsForDate.length > 0) {
+      return { dateKey, slot: slotsForDate[0] };
+    }
+  }
+
+  return null;
+};
+
 const BookingForm = () => {
   const { slug: routeSlug } = useParams();
   const [slots, setSlots] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Убрали автопоказ админского календаря из публичной формы по соображениям безопасности
+  const [selectedDate, setSelectedDate] = useState(undefined);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [autoSelected, setAutoSelected] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [isCalendarOpen, setIsCalendarOpen] = useState(false); // удалено: не показываем админский календарь в публичной форме
+  const [phoneLocked, setPhoneLocked] = useState(false);
+  const [clientTimezone, setClientTimezone] = useState(() => {
+    try {
+      const stored = (typeof window !== 'undefined') ? localStorage.getItem('clientTimezone') : null;
+      if (stored && typeof stored === 'string') return stored;
+    } catch (_) {}
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+    } catch (_) {
+      return 'Europe/Moscow';
+    }
+  });
 
-  const fetchAndGroupSlots = async () => {
+  const selectedDateRef = useRef(selectedDate);
+
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
+
+  const updateSelectedDate = useCallback((date) => {
+    selectedDateRef.current = date;
+    setSelectedDate(date);
+  }, [setSelectedDate, selectedDateRef]);
+
+  const applyAutoSelection = useCallback((incomingSlots = {}) => {
+    const nextInfo = findNextAvailableSlot(incomingSlots);
+
+    if (!nextInfo) {
+      if (!selectedDateRef.current) {
+        setSelectedSlot(null);
+        updateSelectedDate(undefined);
+      }
+      setAutoSelected(false);
+      return;
+    }
+
+    if (!selectedDateRef.current) {
+      const parsedDate = parse(nextInfo.dateKey, 'yyyy-MM-dd', new Date());
+      updateSelectedDate(parsedDate);
+      setSelectedSlot(nextInfo.slot);
+      setAutoSelected(true);
+    }
+  }, [selectedDateRef, updateSelectedDate, setSelectedSlot, setAutoSelected]);
+
+  const fetchAndGroupSlots = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/slots', { params: { ts: Date.now() } });
-      setSlots(response.data);
+      const fetchedSlots = response.data || {};
+      setSlots(fetchedSlots);
       setError(null);
+      applyAutoSelection(fetchedSlots);
     } catch (err) {
       setError('Не удалось загрузить доступное время. Пожалуйста, попробуйте обновить страницу.');
       console.error('Error fetching or grouping slots:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [applyAutoSelection]);
 
   const handleClientTimezoneChange = (tz) => {
     try { if (typeof window !== 'undefined') localStorage.setItem('clientTimezone', tz); } catch (_) {}
@@ -66,7 +133,11 @@ const BookingForm = () => {
 
   useEffect(() => {
     fetchAndGroupSlots();
-  }, []);
+  }, [fetchAndGroupSlots]);
+
+  useEffect(() => {
+    applyAutoSelection(slots);
+  }, [slots, applyAutoSelection]);
 
   // Re-fetch when user returns to tab or window gains focus (e.g., after admin created a slot on another tab)
   useEffect(() => {
@@ -82,25 +153,7 @@ const BookingForm = () => {
       try { window.removeEventListener('focus', onFocus); } catch (_) {}
       try { document.removeEventListener('visibilitychange', onVisibility); } catch (_) {}
     };
-  }, []);
-
-  // Убрали автопоказ админского календаря из публичной формы по соображениям безопасности
-  const [selectedDate, setSelectedDate] = useState(undefined);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // const [isCalendarOpen, setIsCalendarOpen] = useState(false); // удалено: не показываем админский календарь в публичной форме
-  const [phoneLocked, setPhoneLocked] = useState(false);
-  const [clientTimezone, setClientTimezone] = useState(() => {
-    try {
-      const stored = (typeof window !== 'undefined') ? localStorage.getItem('clientTimezone') : null;
-      if (stored && typeof stored === 'string') return stored;
-    } catch (_) {}
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-    } catch (_) {
-      return 'Europe/Moscow';
-    }
-  });
+  }, [fetchAndGroupSlots]);
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, control, watch } = useForm();
 
@@ -139,16 +192,29 @@ const BookingForm = () => {
     parse(dateStr, 'yyyy-MM-dd', new Date())
   );
 
+  const nextAvailableSlot = useMemo(() => {
+    const nextInfo = findNextAvailableSlot(slots);
+    if (!nextInfo) return null;
+
+    return {
+      ...nextInfo,
+      date: parse(nextInfo.dateKey, 'yyyy-MM-dd', new Date()),
+    };
+  }, [slots]);
+
   const isDateAvailable = (date) => {
     return availableDates.some(availableDate => isSameDay(date, availableDate));
   };
 
   const handleDateSelect = (date) => {
     if (date && isDateAvailable(date)) {
-      setSelectedDate(date);
+      setAutoSelected(false);
+      updateSelectedDate(date);
       setSelectedSlot(null); // Reset selected slot when date changes
     } else {
-      setSelectedDate(undefined);
+      setAutoSelected(false);
+      updateSelectedDate(undefined);
+      setSelectedSlot(null);
     }
   };
 
@@ -188,8 +254,9 @@ const BookingForm = () => {
 
       toast.success('Вы успешно записаны! Подтверждение отправлено в Telegram (если вы вошли). Ссылка на видеосессию придёт ближе к началу.', { id: toastId, duration: 8000 });
       reset();
-      setSelectedDate(undefined);
+      updateSelectedDate(undefined);
       setSelectedSlot(null);
+      setAutoSelected(false);
       // Обновляем доступные слоты после успешного бронирования
       await fetchAndGroupSlots();
     } catch (error) {
@@ -269,19 +336,45 @@ const BookingForm = () => {
               classNames={dayPickerClassNames}
             />
 
+            {autoSelected && selectedSlot && selectedDate && (
+              <div className="mt-6 px-4 py-3 rounded-xl border border-brand-accent/30 bg-brand-accent/10 flex items-start gap-3 shadow-sm">
+                <FiCheckCircle className="w-5 h-5 text-brand-accent mt-0.5 animate-bounce" />
+                <div className="text-left text-sm text-brand-secondary">
+                  <p className="font-semibold text-brand-text">Мы подобрали ближайший свободный сеанс автоматически</p>
+                  <p className="mt-1 text-xs text-brand-secondary/80 animate-pulse">Если время не подходит — выберите другой вариант в расписании.</p>
+                  <div className="mt-2 text-sm font-medium text-brand-text">
+                    {format(selectedDate, 'd MMMM', { locale: ru })}
+                    <span className="mx-1 text-brand-secondary">·</span>
+                    <TimeRangeDisplay
+                      startTime={selectedSlot.slotTime}
+                      endTime={selectedSlot.endTime}
+                      isAdmin={false}
+                      className="inline"
+                      clientTimezoneOverride={clientTimezone}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {selectedDate && (
               <div className="mt-6 pt-6 border-t border-gray-200/60">
                 <h3 className="text-base font-semibold text-brand-text mb-4">Доступное время на {format(selectedDate, 'd MMMM', { locale: ru })}:</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
                   {getTimeSlotsForDate(selectedDate).length > 0 ? (
                     getTimeSlotsForDate(selectedDate).map((slot) => (
                       <button
                         key={slot.id}
                         type="button"
-                        onClick={() => setSelectedSlot(slot)}
+                        onClick={() => {
+                          if (selectedSlot?.id !== slot.id) {
+                            setAutoSelected(false);
+                          }
+                          setSelectedSlot(slot);
+                        }}
                         className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 border ${
                           selectedSlot?.id === slot.id
-                            ? 'bg-brand-accent text-white border-brand-accent shadow-md'
+                            ? 'bg-brand-accent text-white border-brand-accent shadow-lg ring-2 ring-brand-accent ring-offset-2 ring-offset-white'
                             : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                         }`}
                       >
@@ -307,11 +400,32 @@ const BookingForm = () => {
             )}
 
             {!selectedDate && (
-                <div className="mt-6 pt-6 border-t border-gray-200/60 text-center flex flex-col justify-center items-center h-48">
-                    <FiCalendar className="w-10 h-10 text-brand-accent/50 mb-4" />
-                    <p className="font-medium text-brand-secondary">Выберите дату в календаре</p>
-                    <p className="text-sm text-brand-secondary/80 mt-1">чтобы увидеть доступное время</p>
-                </div>
+              <div className="mt-6 pt-6 border-t border-gray-200/60 text-center flex flex-col justify-center items-center h-48">
+                <FiCalendar className="w-12 h-12 text-brand-accent/60 mb-4 animate-bounce" />
+                {nextAvailableSlot ? (
+                  <>
+                    <p className="text-sm uppercase tracking-wide text-brand-secondary/70">Следующий доступный сеанс:</p>
+                    <p className="mt-2 text-lg font-semibold text-brand-text">
+                      {format(nextAvailableSlot.date, 'd MMMM', { locale: ru })}
+                    </p>
+                    <div className="mt-1 text-sm text-brand-secondary flex items-center justify-center gap-2">
+                      <TimeRangeDisplay
+                        startTime={nextAvailableSlot.slot.slotTime}
+                        endTime={nextAvailableSlot.slot.endTime}
+                        isAdmin={false}
+                        className="inline"
+                        clientTimezoneOverride={clientTimezone}
+                      />
+                    </div>
+                    <p className="mt-4 text-xs text-brand-secondary/80 animate-pulse">Мы автоматически подставим ближайший сеанс — подтвердите или выберите другое время.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-brand-secondary">Свободные сеансы скоро появятся</p>
+                    <p className="text-sm text-brand-secondary/80 mt-1">Сейчас нет доступных записей — загляните позже.</p>
+                  </>
+                )}
+              </div>
             )}
           </div>
           {/* -- END LEFT COLUMN -- */}
