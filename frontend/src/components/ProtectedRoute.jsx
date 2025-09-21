@@ -44,7 +44,7 @@ const ProtectedRoute = () => {
     );
   }
 
-  return authorized ? <Outlet /> : <Navigate to="/psychologist/login" replace />;
+  return authorized ? <Outlet /> : <Navigate to="/psychologist" replace />;
 };
 
 export default ProtectedRoute;

@@ -861,7 +861,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
-    window.location.href = '/psychologist/login';
+    window.location.href = '/psychologist';
   };
 
   const eventsForSelectedDate = events
