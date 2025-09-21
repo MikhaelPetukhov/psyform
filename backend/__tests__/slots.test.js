@@ -53,7 +53,9 @@ describe('GET /api/slots', () => {
       isBooked: false
     });
 
-    const res = await request(app).get('/api/slots');
+    const res = await request(app)
+      .get('/api/slots')
+      .set('x-practitioner-id', practitioner.id);
     expect(res.status).toBe(200);
     const data = res.body;
 

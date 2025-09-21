@@ -156,14 +156,16 @@ router.get('/', async (req, res) => {
       typeof req.query.dateTo !== 'undefined' ||
       String(req.query.short || '').toLowerCase() === 'true';
 
-    const baseWhere = { isBooked: false };
-    // practitioner scoping
-    if (req.practitionerId) {
-      baseWhere.practitionerId = req.practitionerId;
-    } else if (!req.__adminMissingTenant) {
-      const defaultPractitionerId = process.env.DEFAULT_PRACTITIONER_ID;
-      if (defaultPractitionerId) baseWhere.practitionerId = defaultPractitionerId;
+    const practitionerId = req.practitionerId;
+    if (!practitionerId) {
+      const message = req.__adminMissingTenant
+        ? 'Администратор должен указать психолога через заголовок x-practitioner-id или x-practitioner-slug'
+        : 'Не указан арендатор (practitionerId). Передайте x-practitioner-id или x-practitioner-slug';
+      logger.warn(`GET /api/slots without practitionerId; returning 400`);
+      return res.status(400).json({ msg: message });
     }
+
+    const baseWhere = { isBooked: false, practitionerId };
 
     // Date filters
     const now = new Date();

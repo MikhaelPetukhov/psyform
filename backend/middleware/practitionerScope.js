@@ -11,7 +11,6 @@ const logger = require('../config/logger');
 // 3) x-practitioner-slug header (DB lookup by slug)
 // 4) x-practitioner-public-slug header (DB lookup by publicSlug)
 // 5) req.user.practitionerId (from client auth middleware)
-// 6) DEFAULT_PRACTITIONER_ID or DEFAULT_PRACTITIONER_SLUG environment variables
 module.exports = async function practitionerScope(req, res, next) {
   try {
     let practitionerId = null;
@@ -190,18 +189,11 @@ module.exports = async function practitionerScope(req, res, next) {
       // For client tokens decoded by other middleware
       practitionerId = req.user.practitionerId;
       logger.debug(`[scope] resolved via client token practitionerId=${practitionerId} for ${req.method} ${req.originalUrl}`);
-    } else if (process.env.DEFAULT_PRACTITIONER_ID) {
-      practitionerId = process.env.DEFAULT_PRACTITIONER_ID;
-      logger.debug(`[scope] resolved via DEFAULT_PRACTITIONER_ID=${practitionerId} for ${req.method} ${req.originalUrl}`);
-    } else if (process.env.DEFAULT_PRACTITIONER_SLUG) {
-      const p = await practitionerCache.getBySlug(String(process.env.DEFAULT_PRACTITIONER_SLUG).trim());
-      practitionerId = p ? p.id : null;
-      logger.debug(`[scope] resolved via DEFAULT_PRACTITIONER_SLUG=${process.env.DEFAULT_PRACTITIONER_SLUG} -> ${practitionerId} for ${req.method} ${req.originalUrl}`);
     }
 
     req.practitionerId = practitionerId || null;
     if (!req.practitionerId) {
-      logger.warn(`[scope] practitionerId unresolved for ${req.method} ${req.originalUrl}`);
+      logger.warn(`[scope] practitionerId unresolved (no explicit tenant) for ${req.method} ${req.originalUrl}`);
     }
     return next();
   } catch (e) {
