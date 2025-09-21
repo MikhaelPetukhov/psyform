@@ -5,7 +5,6 @@ import { Toaster } from 'react-hot-toast';
 import BookingForm from './components/BookingForm';
 import Landing from './components/Landing';
 import AdminApp from './components/AdminApp';
-import AdminLogin from './components/AdminLogin';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthCallback from './components/AuthCallback';
 import AdminLanding from './components/AdminLanding';
@@ -49,8 +48,6 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/p/:slug" element={<BookingForm />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/psychologist/:slug/login" element={<AdminLogin />} />
-        <Route path="/psychologist/login" element={<AdminLogin />} />
         {/* Public landing with Telegram admin login button */}
         <Route path="/psychologist" element={<AdminLanding />} />
         {/* Protected personal admin panel by slug */}
