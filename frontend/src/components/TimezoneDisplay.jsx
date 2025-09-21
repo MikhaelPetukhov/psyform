@@ -1,6 +1,71 @@
 import React, { useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { parseISO } from 'date-fns';
+import { getCityByTimezone } from '../utils/russianCities';
+
+const normalizeOffsetLabel = (label) => {
+  if (!label) return null;
+  const cleaned = label.replace('GMT', 'UTC').replace(/\s+/g, '');
+  const match = cleaned.match(/^UTC([+-]?)(\d{1,2})(?::?(\d{2}))?/i);
+  if (!match) return cleaned;
+
+  const sign = match[1] === '-' ? '-' : '+';
+  const hours = parseInt(match[2], 10);
+  const minutes = match[3] ? parseInt(match[3], 10) : 0;
+
+  if (!Number.isFinite(hours)) return cleaned;
+
+  if (!minutes) {
+    return `UTC${sign}${hours}`;
+  }
+
+  const paddedMinutes = minutes.toString().padStart(2, '0');
+  return `UTC${sign}${hours}:${paddedMinutes}`;
+};
+
+export const getTimezoneMetadata = (timezone) => {
+  if (!timezone) {
+    return {
+      cityName: null,
+      offsetLabel: null,
+      shortLabel: null,
+      displayLabel: '',
+    };
+  }
+
+  const city = getCityByTimezone(timezone);
+  const cityName = city?.name || null;
+  let offsetLabel = null;
+
+  if (city?.utcOffset) {
+    offsetLabel = normalizeOffsetLabel(`UTC${city.utcOffset}`);
+  }
+
+  let shortLabel = null;
+  try {
+    const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: timezone, timeZoneName: 'short' }).formatToParts(new Date());
+    const tzName = parts.find(p => p.type === 'timeZoneName')?.value;
+    shortLabel = normalizeOffsetLabel(tzName || '') || null;
+  } catch (_) {
+    shortLabel = null;
+  }
+
+  if (!offsetLabel && shortLabel) {
+    offsetLabel = shortLabel;
+  }
+
+  const displayLabel = cityName
+    ? `${cityName}${offsetLabel ? ` (${offsetLabel})` : ''}`
+    : (offsetLabel || timezone);
+
+  return {
+    cityName,
+    offsetLabel,
+    shortLabel,
+    displayLabel,
+  };
+};
+
+export const getTimezoneDisplayLabel = (timezone) => getTimezoneMetadata(timezone).displayLabel;
 
 /**
  * Простой компонент для отображения времени
@@ -124,13 +189,15 @@ export const SimpleTimeDisplay = ({
 /**
  * Компонент для отображения временного диапазона
  */
-export const TimeRangeDisplay = ({ 
-  startTime, 
-  endTime, 
+export const TimeRangeDisplay = ({
+  startTime,
+  endTime,
   practitionerTimezone = null,
   isAdmin = false,
   className = '',
   clientTimezoneOverride = null,
+  showTimezoneLabel = false,
+  timezoneLabelClassName = 'ml-1 text-xs font-medium text-brand-secondary',
 }) => {
   const timezone = useMemo(() => {
     // Для психологов - используем их выбранный часовой пояс
@@ -181,11 +248,21 @@ export const TimeRangeDisplay = ({
   };
 
   const timeRange = formatTimeRange(startTime, endTime);
-  const showMoscowLabel = !isAdmin && timezone === 'Europe/Moscow';
+  const timezoneMeta = useMemo(() => getTimezoneMetadata(timezone), [timezone]);
+  const label = timezoneMeta.displayLabel;
+  const showLabel = showTimezoneLabel && label && timeRange !== '—';
+  const showMoscowLabel = !isAdmin && timezone === 'Europe/Moscow' && !showTimezoneLabel;
 
   return (
     <span className={className}>
-      {timeRange}
+      <span className={showLabel ? 'inline-flex items-center' : undefined}>
+        <span>{timeRange}</span>
+        {showLabel && (
+          <span className={timezoneLabelClassName}>
+            · {label}
+          </span>
+        )}
+      </span>
       {showMoscowLabel && <span className="text-xs text-gray-500 ml-1">Все времена указаны по московскому времени (UTC+3)</span>}
     </span>
   );
