@@ -182,11 +182,52 @@ function TelegramLogin({ onLogin, forceModal = false }) {
 
   // Modal overlay for unauthorized users
   const AuthModal = () => {
+    const getCurrentPublicSlug = () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const memorySlug = window.__PRACTITIONER_PUBLIC_SLUG__;
+          if (memorySlug && typeof memorySlug === 'string') return memorySlug;
+        }
+      } catch (_) { /* ignore */ }
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const stored = window.localStorage.getItem('practitionerPublicSlug');
+          if (stored) return stored;
+        }
+      } catch (_) { /* ignore */ }
+      return '';
+    };
+
+    const base64UrlEncode = (value) => {
+      if (!value) return '';
+      try {
+        if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+          try {
+            if (typeof TextEncoder !== 'undefined') {
+              const bytes = new TextEncoder().encode(value);
+              let binary = '';
+              bytes.forEach((b) => { binary += String.fromCharCode(b); });
+              return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+          } catch (_) { /* ignore encoder fallback */ }
+          return window.btoa(unescape(encodeURIComponent(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+      } catch (_) { /* ignore */ }
+      try {
+        if (typeof Buffer !== 'undefined') {
+          return Buffer.from(value, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+      } catch (_) { /* ignore */ }
+      return '';
+    };
+
     // Generate login link with nonce
     const generateLoginLink = () => {
       const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const botUsername = botInfo.username || 'PsyForm_bot';
-      return `https://t.me/${botUsername}?start=login_${nonce}`;
+      const publicSlug = getCurrentPublicSlug();
+      const slugPart = publicSlug ? `_${base64UrlEncode(publicSlug)}` : '';
+      return `https://t.me/${botUsername}?start=login_${nonce}${slugPart}`;
     };
 
     return (

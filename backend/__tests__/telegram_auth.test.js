@@ -7,6 +7,7 @@ const { TgAuthCode, Client, Practitioner } = require('../models');
 
 // Helper: base64url for r param
 function b64url(str) { return Buffer.from(str, 'utf8').toString('base64url'); }
+const formPath = (p) => `/p/${encodeURIComponent(p.publicSlug || p.slug)}`;
 
 describe('Telegram auth flow', () => {
   let p1, p2;
@@ -15,8 +16,8 @@ describe('Telegram auth flow', () => {
     process.env.JWT_SECRET = 'test-secret';
     process.env.AUTH_CODE_TTL_MIN = '10';
     await sequelize.sync({ force: true });
-    p1 = await Practitioner.create({ slug: 'p1', displayName: 'P1' });
-    p2 = await Practitioner.create({ slug: 'p2', displayName: 'P2' });
+    p1 = await Practitioner.create({ slug: 'p1', publicSlug: 'p1-public', displayName: 'P1' });
+    p2 = await Practitioner.create({ slug: 'p2', publicSlug: 'p2-public', displayName: 'P2' });
   });
 
   beforeEach(async () => {
@@ -96,7 +97,7 @@ describe('Telegram auth flow', () => {
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p1.slug)}`)
         .set('Cookie', cookies)
         .expect(302);
-      expect(second.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
+      expect(second.headers.location).toBe(formPath(p1));
     });
 
     test('expired token returns 401', async () => {
@@ -122,7 +123,7 @@ describe('Telegram auth flow', () => {
         .get(`/api/auth/magic?t=${encodeURIComponent('totally-wrong')}&p=${encodeURIComponent(p1.slug)}`)
         .set('Cookie', cookies)
         .expect(302);
-      expect(invalid.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
+      expect(invalid.headers.location).toBe(formPath(p1));
 
       // ensure original record remains used
       const found = await TgAuthCode.findOne({ where: { codeHash: hashCode(code) } });
@@ -155,10 +156,26 @@ describe('Telegram auth flow', () => {
       const res = await request(app)
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}`)
         .expect(302);
-      expect(res.headers.location).toBe(`/p/${encodeURIComponent(p1.slug)}`);
+      expect(res.headers.location).toBe(formPath(p1));
 
       // Client must be created under p1
       const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p1.id } });
+      expect(client).toBeTruthy();
+    });
+
+    test('slug parameter binds tenant when record is not scoped', async () => {
+      const code = 'slug-binds';
+      const rec = await createCodeRecord({ code, tgPhone: '+70000000021', practitionerId: null });
+
+      const res = await request(app)
+        .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p2.slug)}`)
+        .expect(302);
+      expect(res.headers.location).toBe(formPath(p2));
+
+      const updated = await TgAuthCode.findOne({ where: { codeHash: hashCode(code) } });
+      expect(String(updated.practitionerId)).toBe(String(p2.id));
+
+      const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p2.id } });
       expect(client).toBeTruthy();
     });
   });

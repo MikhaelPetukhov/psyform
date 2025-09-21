@@ -1,11 +1,13 @@
 let Telegraf, Markup; // Ленивая загрузка из 'telegraf' при старте бота
 const crypto = require('crypto');
+const { Op } = require('sequelize');
 const logger = require('../config/logger');
 const { Client, Practitioner, TgAuthCode, Booking } = require('../models');
 
 let bot = null;
 // In-memory map to store pending login tokens per Telegram user until they share contact
-const pendingLoginTokens = new Map(); // key: tgUserId (string), value: token (string)
+// key: tgUserId (string), value: { token: string, slug: string|null }
+const pendingLoginTokens = new Map();
 // Track users who entered admin onboarding mode to issue admin-scoped codes on contact share
 const adminModeUsers = new Set(); // keys: tgUserId (string)
 
@@ -27,10 +29,21 @@ function getPublicWebUrl() {
   return process.env.PUBLIC_WEB_URL || '';
 }
 
+function decodeBase64Url(value) {
+  if (!value) return null;
+  try {
+    let normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    while (normalized.length % 4) normalized += '=';
+    return Buffer.from(normalized, 'base64').toString('utf8');
+  } catch (_) {
+    return null;
+  }
+}
+
 // Ensure we create a unique auth code entry, or reuse an active one for the same user.
 // Scope can be 'client' (default) or 'admin'.
 // Returns { record, code, codeHash, reused }
-async function ensureUniqueAuthCodeForClient(client, preferredCode = null, scope = 'client') {
+async function ensureUniqueAuthCodeForClient(client, preferredCode = null, scope = 'client', practitionerId = null) {
   const ttl = getAuthCodeTTLMinutes();
   const now = new Date();
   const calcExpiresAt = () => new Date(Date.now() + ttl * 60 * 1000);
@@ -43,15 +56,26 @@ async function ensureUniqueAuthCodeForClient(client, preferredCode = null, scope
         const notExpired = !existing.expiresAt || existing.expiresAt > now;
         const notUsed = !existing.usedAt;
         // If the same user tries again and the code is still valid, reuse/update it idempotently
-        if (String(existing.tgUserId) === String(client.tgUserId) && existing.scope === scope && notExpired && notUsed) {
-          await existing.update({
+        const samePractitioner = !practitionerId
+          || !existing.practitionerId
+          || String(existing.practitionerId) === String(practitionerId);
+        if (String(existing.tgUserId) === String(client.tgUserId)
+          && existing.scope === scope
+          && notExpired
+          && notUsed
+          && samePractitioner) {
+          const updatePayload = {
             tgChatId: client.tgChatId,
             tgUsername: client.tgUsername,
             firstName: client.firstName,
             lastName: client.lastName,
             tgPhone: client.tgPhone || null,
             expiresAt: calcExpiresAt(),
-          });
+          };
+          if (practitionerId && !existing.practitionerId) {
+            updatePayload.practitionerId = practitionerId;
+          }
+          await existing.update(updatePayload);
           return { record: existing, code, codeHash, reused: true };
         }
         // Collision with other user or used/expired entry: do not reuse, request another code
@@ -68,6 +92,7 @@ async function ensureUniqueAuthCodeForClient(client, preferredCode = null, scope
         tgPhone: client.tgPhone || null,
         expiresAt: calcExpiresAt(),
         scope,
+        practitionerId: practitionerId || null,
       });
       return { record, code, codeHash, reused: false };
     } catch (e) {
@@ -123,34 +148,51 @@ async function createOrUpdateClientFromCtx(ctx, extra = {}) {
   return client;
 }
 
-async function sendAuthCode(ctx, client, forcedCode = null) {
-  const { code } = await ensureUniqueAuthCodeForClient(client, forcedCode);
+async function sendAuthCode(ctx, client, forcedCode = null, options = {}) {
+  const opts = options || {};
+  const resolvedPractitionerId = opts.practitionerId
+    || (opts.practitioner && opts.practitioner.id)
+    || client?.practitionerId
+    || null;
+
+  const { code } = await ensureUniqueAuthCodeForClient(client, forcedCode, 'client', resolvedPractitionerId);
   const ttl = getAuthCodeTTLMinutes();
 
-  // Deep link for auto-login (no manual code typing)
   const baseUrl = getPublicWebUrl();
-  const practitionerSlug = process.env.DEFAULT_PRACTITIONER_SLUG || '';
+  const isDevLike = !baseUrl || baseUrl.includes('localhost') || baseUrl.includes('your-domain.com');
+  if (isDevLike) {
+    const fallbackUrl = baseUrl || process.env.PUBLIC_WEB_URL || 'http://localhost:3001';
+    await ctx.reply(
+      `🔐 Код для входа: ${code}\n\nПерейдите на сайт ${fallbackUrl} и введите этот код в форме авторизации.`
+    );
+    return;
+  }
+
+  let practitionerSlug = opts.practitionerSlug || null;
+  if (!practitionerSlug && opts.practitioner) {
+    practitionerSlug = opts.practitioner.slug || opts.practitioner.publicSlug || null;
+  }
+  if (!practitionerSlug && resolvedPractitionerId) {
+    try {
+      const p = await Practitioner.findByPk(resolvedPractitionerId);
+      if (p) practitionerSlug = p.slug || p.publicSlug || null;
+    } catch (_) { /* ignore */ }
+  }
+  if (!practitionerSlug) {
+    const fallbackSlug = (process.env.DEFAULT_PRACTITIONER_SLUG || '').trim();
+    practitionerSlug = fallbackSlug || null;
+  }
+
   const postLoginPath = (process.env.POST_LOGIN_REDIRECT || '').trim();
   const rParam = postLoginPath && postLoginPath.startsWith('/')
     ? `&r=${encodeURIComponent(Buffer.from(postLoginPath, 'utf8').toString('base64url'))}`
     : '';
-  const link = baseUrl
-    ? `${baseUrl.replace(/\/$/, '')}/api/auth/magic?t=${encodeURIComponent(code)}${practitionerSlug ? `&p=${encodeURIComponent(practitionerSlug)}` : ''}${rParam}`
-    : null;
+  const link = `${baseUrl.replace(/\/$/, '')}/api/auth/magic?t=${encodeURIComponent(code)}${practitionerSlug ? `&p=${encodeURIComponent(practitionerSlug)}` : ''}${rParam}`;
 
-  // If we have a deep link, do not show the numeric code to the user — just provide the login button
-  const text = link
-    ? `✅ Готово!\nСсылка для входа действует ${ttl} минут.\nНажмите кнопку ниже, чтобы войти.`
-    : `Ваш код для входа: ${code}\nСрок действия: ${ttl} мин.\n\nВернитесь на сайт и введите этот код, чтобы завершить вход.`;
-
-  const extra = link
-    ? {
-        disable_web_page_preview: true,
-        ...Markup.inlineKeyboard([[Markup.button.url('Войти', link)]])
-      }
-    : { disable_web_page_preview: true };
-
-  await ctx.reply(text, extra);
+  await ctx.reply(
+    `🔐 Теперь нажмите кнопку ниже, чтобы войти на сайт (ссылка действует ${ttl} минут):`,
+    Markup.inlineKeyboard([[Markup.button.url('🌐 Войти на сайт', link)]])
+  );
 }
 
 // Admin-scoped auth code sender (shows numeric code or magic-link when PUBLIC_WEB_URL is set)
@@ -212,13 +254,22 @@ function startTelegramBot() {
       if (payload && payload.startsWith('admin_login_')) {
         const token = payload.substring('admin_login_'.length);
         if (token && tgUserId) {
-          pendingLoginTokens.set(tgUserId, token);
+          pendingLoginTokens.set(tgUserId, { token, slug: null });
         }
         if (tgUserId) adminModeUsers.add(tgUserId);
       } else if (payload && payload.startsWith('login_')) {
-        const token = payload.substring('login_'.length);
+        const rest = payload.substring('login_'.length);
+        let token = rest;
+        let slug = null;
+        const idx = rest.indexOf('_');
+        if (idx >= 0) {
+          token = rest.substring(0, idx);
+          const encodedSlug = rest.substring(idx + 1);
+          const decoded = decodeBase64Url(encodedSlug);
+          slug = decoded ? decoded.trim() : null;
+        }
         if (token && tgUserId) {
-          pendingLoginTokens.set(tgUserId, token);
+          pendingLoginTokens.set(tgUserId, { token, slug: slug || null });
         }
       }
       // Enable admin mode if payload contains admin directive
@@ -290,41 +341,61 @@ function startTelegramBot() {
         await sendAdminAuthCode(ctx, identity, null);
         adminModeUsers.delete(tgUserIdStr);
       } else {
-        const client = await createOrUpdateClientFromCtx(ctx, { tgPhone: phone });
-        // Не отправляем отдельное сообщение о получении номера для лаконичности и приватности
-        
-        // Generate login link
-        const tgUserId = client.tgUserId;
-        const pending = tgUserId ? pendingLoginTokens.get(String(tgUserId)) : null;
-        
-        // Create or reuse an auth code for this user ensuring uniqueness (client scope)
-        const { code } = await ensureUniqueAuthCodeForClient(client, pending || null, 'client');
-        const ttl = getAuthCodeTTLMinutes();
-
-        // For development - send code as text instead of button
-        const baseUrl = getPublicWebUrl();
-        if (!baseUrl || baseUrl.includes('localhost') || baseUrl.includes('your-domain.com')) {
-          const fallbackUrl = process.env.PUBLIC_WEB_URL || 'http://localhost:3001';
-          await ctx.reply(
-            `🔐 Код для входа: ${code}\n\nПерейдите на сайт ${fallbackUrl} и введите этот код в форме авторизации.`
-          );
-        } else {
-          // Production - use inline button
-          const practitionerSlug = process.env.DEFAULT_PRACTITIONER_SLUG || '';
-          const postLoginPath = (process.env.POST_LOGIN_REDIRECT || '').trim();
-          const rParam = postLoginPath && postLoginPath.startsWith('/')
-            ? `&r=${encodeURIComponent(Buffer.from(postLoginPath, 'utf8').toString('base64url'))}`
-            : '';
-          
-          const link = `${baseUrl.replace(/\/$/, '')}/api/auth/magic?t=${encodeURIComponent(code)}${practitionerSlug ? `&p=${encodeURIComponent(practitionerSlug)}` : ''}${rParam}`;
-          
-          await ctx.reply(
-            '🔐 Теперь нажмите кнопку ниже, чтобы войти на сайт:',
-            Markup.inlineKeyboard([[Markup.button.url('🌐 Войти на сайт', link)]])
-          );
+        const pendingEntryRaw = pendingLoginTokens.get(tgUserIdStr) || null;
+        let pendingToken = null;
+        let pendingSlug = null;
+        if (pendingEntryRaw) {
+          if (typeof pendingEntryRaw === 'string') {
+            pendingToken = pendingEntryRaw;
+          } else if (typeof pendingEntryRaw === 'object') {
+            pendingToken = pendingEntryRaw.token || null;
+            pendingSlug = pendingEntryRaw.slug || null;
+          }
         }
-        
-        if (pending) pendingLoginTokens.delete(String(tgUserId));
+
+        let practitioner = null;
+        if (pendingSlug) {
+          try {
+            practitioner = await Practitioner.findOne({
+              where: {
+                [Op.or]: [
+                  { publicSlug: pendingSlug },
+                  { slug: pendingSlug },
+                ],
+              },
+            });
+          } catch (_) { /* ignore */ }
+        }
+        if (!practitioner) {
+          const fallbackSlug = (process.env.DEFAULT_PRACTITIONER_SLUG || '').trim();
+          if (fallbackSlug) {
+            try {
+              practitioner = await Practitioner.findOne({
+                where: {
+                  [Op.or]: [
+                    { slug: fallbackSlug },
+                    { publicSlug: fallbackSlug },
+                  ],
+                },
+              });
+            } catch (_) { /* ignore */ }
+          }
+        }
+
+        const extraPayload = { tgPhone: phone };
+        if (practitioner && practitioner.id) {
+          extraPayload.practitionerId = practitioner.id;
+        }
+        const client = await createOrUpdateClientFromCtx(ctx, extraPayload);
+
+        const practitionerId = practitioner?.id || client?.practitionerId || null;
+
+        await sendAuthCode(ctx, client, pendingToken || null, {
+          practitioner,
+          practitionerId,
+        });
+
+        if (pendingEntryRaw) pendingLoginTokens.delete(tgUserIdStr);
       }
     } catch (e) {
       logger.error(`[TELEGRAM BOT] contact error: ${e.message}`);
