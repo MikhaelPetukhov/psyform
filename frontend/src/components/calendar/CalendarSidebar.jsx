@@ -4,6 +4,7 @@ import { ru } from 'date-fns/locale';
 
 import { getBookingStatusClass } from '../../utils/bookingStatus';
 import { getClientsFocusUrl } from '../../utils/calendar';
+import { SimpleTimeDisplay, TimeRangeDisplay } from '../TimezoneDisplay';
 
 const CalendarSidebar = ({
   selectedDate,
@@ -11,6 +12,7 @@ const CalendarSidebar = ({
   slots,
   loadingBookings,
   loadingSlots,
+  practitionerTimezone,
   onCreateSlot,
   onManualBooking,
   onEventSelect,
@@ -67,7 +69,23 @@ const CalendarSidebar = ({
               onClick={() => onEventSelect(event)}
             >
               <div className="text-sm font-medium">
-                <span className="font-mono">{format(event.start, 'HH:mm')}–{format(event.end, 'HH:mm')}</span> · {event.title}
+                {event.end ? (
+                  <TimeRangeDisplay
+                    startTime={event.start}
+                    endTime={event.end}
+                    practitionerTimezone={practitionerTimezone}
+                    isAdmin={true}
+                    className="font-mono"
+                  />
+                ) : (
+                  <SimpleTimeDisplay
+                    utcTime={event.start}
+                    practitionerTimezone={practitionerTimezone}
+                    isAdmin={true}
+                    className="font-mono"
+                  />
+                )}
+                {` · ${event.title}`}
               </div>
               {event.telegramHandle && (
                 <div className="text-xs mt-1">
@@ -107,7 +125,20 @@ const CalendarSidebar = ({
                 onClick={() => onSlotSelect(slot)}
               >
                 <span className="text-sm">
-                  {format(new Date(slot.slotTime), 'HH:mm')}–{format(new Date(slot.endTime), 'HH:mm')}
+                  {slot.endTime ? (
+                    <TimeRangeDisplay
+                      startTime={slot.slotTime}
+                      endTime={slot.endTime}
+                      practitionerTimezone={practitionerTimezone}
+                      isAdmin={true}
+                    />
+                  ) : (
+                    <SimpleTimeDisplay
+                      utcTime={slot.slotTime}
+                      practitionerTimezone={practitionerTimezone}
+                      isAdmin={true}
+                    />
+                  )}
                 </span>
                 <button
                   onClick={(event) => {

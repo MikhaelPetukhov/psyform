@@ -27,6 +27,7 @@ const CalendarView = ({
   eventsForSelectedDate,
   slotsForSelectedDate,
   gridLoading,
+  practitionerTimezone,
   onCurrentMonthChange,
   onViewModeChange,
   onDateSelect,
@@ -185,7 +186,12 @@ const CalendarView = ({
                     onEventSelect(event);
                   }}
                 >
-                  <SimpleTimeDisplay utcTime={event.start} isAdmin={true} className="list-item__time inline" />
+                  <SimpleTimeDisplay
+                    utcTime={event.start}
+                    isAdmin={true}
+                    practitionerTimezone={practitionerTimezone}
+                    className="list-item__time inline"
+                  />
                   <ContactIcon method={event.preferredContact} />
                   <span className="list-item__title">{event.title}</span>
                 </li>
@@ -222,7 +228,12 @@ const CalendarView = ({
               )} contact-${event.preferredContact || 'phone'}`}
               onClick={() => onEventSelect(event)}
             >
-              <SimpleTimeDisplay utcTime={event.start} isAdmin={true} className="list-item__time inline" />
+              <SimpleTimeDisplay
+                utcTime={event.start}
+                isAdmin={true}
+                practitionerTimezone={practitionerTimezone}
+                className="list-item__time inline"
+              />
               <ContactIcon method={event.preferredContact} />
               <span className="list-item__title">{event.title}</span>
             </li>
