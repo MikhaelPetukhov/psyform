@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { FiMapPin, FiClock, FiCheck } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiMapPin, FiCheck } from 'react-icons/fi';
 import { TOP_CITIES, OTHER_CITIES, detectClosestRussianCity } from '../utils/russianCities';
 import CityTimezonePicker from './CityTimezonePicker';
+
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
+const MOSCOW_CITY = TOP_CITIES.find(city => city.timezone === MOSCOW_TIMEZONE) || {
+  name: 'Москва',
+  timezone: MOSCOW_TIMEZONE
+};
 
 function getUtcOffsetDisplay(timezone) {
   if (!timezone) return '';
@@ -24,27 +30,43 @@ const ClientTimezoneSelector = ({
   const [showMoscowTime, setShowMoscowTime] = useState(false);
   const [detectedCity, setDetectedCity] = useState(null);
   const [selectedCity, setSelectedCity] = useState(null);
+  const [previousNonMoscowTimezone, setPreviousNonMoscowTimezone] = useState(null);
   const [autoCardDismissed, setAutoCardDismissed] = useState(false);
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
   const [now, setNow] = useState(new Date());
+  const moscowOverrideRef = useRef(false);
 
   useEffect(() => {
-    // Автоопределение города клиента
     const detected = detectClosestRussianCity();
     setDetectedCity(detected);
 
-    // Если timezone не установлен, используем автоопределение
     if (!selectedTimezone) {
-      setSelectedCity(detected);
-      onTimezoneChange(detected.timezone);
-      // Сразу не показываем синий блок, если автоопределение и так выбрано
+      if (detected?.timezone) {
+        setSelectedCity(() => ({ ...detected }));
+        setPreviousNonMoscowTimezone(detected.timezone);
+        onTimezoneChange(detected.timezone);
+        setAutoCardDismissed(true);
+      }
+      return;
+    }
+
+    if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
+      const allCities = [...TOP_CITIES, ...OTHER_CITIES];
+      const matchedCity = allCities.find(c => c.timezone === selectedTimezone);
+      const cityToSet = matchedCity ? { ...matchedCity } : { name: selectedTimezone, timezone: selectedTimezone };
+      setSelectedCity(prev => (prev?.timezone === selectedTimezone ? prev : cityToSet));
+    }
+
+    if (detected?.timezone && selectedTimezone === detected.timezone) {
       setAutoCardDismissed(true);
-    } else {
-      // Найти город по переданному timezone
-      const city = [...TOP_CITIES, ...OTHER_CITIES].find(c => c.timezone === selectedTimezone);
-      setSelectedCity(city || detected);
-      // Если исходно выбранная таймзона совпадает с автоопределённой — не показываем синий блок
-      try { if (selectedTimezone === detected.timezone) setAutoCardDismissed(true); } catch (_) {}
+    }
+
+    if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
+      setPreviousNonMoscowTimezone(selectedTimezone);
+    }
+
+    if (selectedTimezone !== MOSCOW_TIMEZONE && moscowOverrideRef.current) {
+      moscowOverrideRef.current = false;
     }
   }, [selectedTimezone, onTimezoneChange]);
 
@@ -57,13 +79,18 @@ const ClientTimezoneSelector = ({
   }, []);
 
   const handleCitySelect = (city) => {
-    setSelectedCity(city);
-    onTimezoneChange(city.timezone);
+    if (!city?.timezone) return;
+
+    const normalizedCity = { ...city };
+    setSelectedCity(normalizedCity);
+    setPreviousNonMoscowTimezone(normalizedCity.timezone);
+    moscowOverrideRef.current = false;
+    onTimezoneChange(normalizedCity.timezone);
     setIsOpen(false);
     setShowMoscowTime(false); // Сбрасываем тумблер МСК при выборе города
     // Если пользователь подтвердил автоопределённый город — скрываем информационную карточку
     try {
-      if (detectedCity && city && detectedCity.timezone === city.timezone) {
+      if (detectedCity && detectedCity.timezone === normalizedCity.timezone) {
         setAutoCardDismissed(true);
       }
     } catch (_) { /* ignore */ }
@@ -76,21 +103,33 @@ const ClientTimezoneSelector = ({
   };
 
   const toggleMoscowTime = () => {
-    setShowMoscowTime(!showMoscowTime);
-    if (!showMoscowTime) {
-      // Включаем показ по МСК - передаем московский timezone
-      onTimezoneChange('Europe/Moscow');
+    const nextValue = !showMoscowTime;
+
+    if (nextValue) {
+      const baseTimezone = selectedTimezone
+        || selectedCity?.timezone
+        || previousNonMoscowTimezone
+        || detectedCity?.timezone
+        || MOSCOW_TIMEZONE;
+
+      setPreviousNonMoscowTimezone(baseTimezone);
+      moscowOverrideRef.current = true;
+      onTimezoneChange(MOSCOW_TIMEZONE);
     } else {
-      // Возвращаем к определенному/выбранному городу
-      if (selectedCity) {
-        onTimezoneChange(selectedCity.timezone);
-      }
+      moscowOverrideRef.current = false;
+      const timezoneToRestore = previousNonMoscowTimezone
+        || selectedCity?.timezone
+        || detectedCity?.timezone
+        || MOSCOW_TIMEZONE;
+
+      onTimezoneChange(timezoneToRestore);
     }
+
+    setShowMoscowTime(nextValue);
   };
 
-  const currentDisplayCity = showMoscowTime 
-    ? TOP_CITIES.find(c => c.timezone === 'Europe/Moscow')
-    : selectedCity;
+  const currentDisplayCity = showMoscowTime ? MOSCOW_CITY : selectedCity;
+  const currentDisplayTimezone = showMoscowTime ? MOSCOW_TIMEZONE : selectedCity?.timezone;
   const isDetectedSelected = !!(detectedCity && selectedCity && !showMoscowTime && selectedCity.timezone === detectedCity.timezone);
 
   if (compact) {
@@ -102,7 +141,7 @@ const ClientTimezoneSelector = ({
         >
           <FiMapPin className="w-4 h-4" />
           <span>{currentDisplayCity?.name || 'Выбрать город'}</span>
-          <span className="text-xs">UTC{currentDisplayCity?.utcOffset}</span>
+          <span className="text-xs">{getUtcOffsetDisplay(currentDisplayTimezone)}</span>
         </button>
         
         {isOpen && (
@@ -117,7 +156,7 @@ const ClientTimezoneSelector = ({
                 className="w-full text-left p-2 hover:bg-gray-50 text-sm"
               >
                 <div className="font-medium">{city.name}</div>
-                <div className="text-xs text-gray-500">UTC{city.utcOffset}</div>
+                <div className="text-xs text-gray-500">{getUtcOffsetDisplay(city.timezone)}</div>
               </button>
             ))}
           </div>
@@ -137,7 +176,7 @@ const ClientTimezoneSelector = ({
               <div>
                 <h4 className="text-sm font-medium text-blue-800">Ваше время определено автоматически</h4>
                 <p className="text-sm text-blue-700 mt-1">
-                  Город: <strong>{detectedCity.name}</strong> (UTC{detectedCity.utcOffset})
+                  Город: <strong>{detectedCity.name}</strong> ({getUtcOffsetDisplay(detectedCity.timezone)})
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
                   Текущее время: {now.toLocaleTimeString('ru-RU', { timeZone: detectedCity.timezone, hour12: false })}
@@ -165,7 +204,7 @@ const ClientTimezoneSelector = ({
       )}
 
       {/* Тумблер МСК */}
-      {showMoscowToggle && selectedCity?.timezone !== 'Europe/Moscow' && (
+      {showMoscowToggle && selectedCity?.timezone !== MOSCOW_TIMEZONE && (
         <div className="flex items-center gap-3">
           <label className="flex items-center cursor-pointer">
             <input
@@ -201,9 +240,9 @@ const ClientTimezoneSelector = ({
                 {currentDisplayCity?.name || 'Выберите город'}
               </div>
               <div className="text-sm text-gray-500">
-                {getUtcOffsetDisplay(showMoscowTime ? 'Europe/Moscow' : selectedCity?.timezone)} • {
+                {getUtcOffsetDisplay(currentDisplayTimezone)} • {
                   now.toLocaleTimeString('ru-RU', {
-                    timeZone: showMoscowTime ? 'Europe/Moscow' : selectedCity?.timezone,
+                    timeZone: currentDisplayTimezone || undefined,
                     hour12: false
                   })
                 }
@@ -251,7 +290,7 @@ const ClientTimezoneSelector = ({
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium">{city.name}</div>
-                        <div className="text-sm text-gray-500">UTC{city.utcOffset}</div>
+                        <div className="text-sm text-gray-500">{getUtcOffsetDisplay(city.timezone)}</div>
                       </div>
                       {selectedCity?.timezone === city.timezone && (
                         <FiCheck className="text-brand-accent" />
@@ -278,7 +317,7 @@ const ClientTimezoneSelector = ({
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-sm">{city.name}</div>
-                          <div className="text-xs text-gray-500">{city.region} • UTC{city.utcOffset}</div>
+                          <div className="text-xs text-gray-500">{city.region} • {getUtcOffsetDisplay(city.timezone)}</div>
                         </div>
                         {selectedCity?.timezone === city.timezone && (
                           <FiCheck className="text-brand-accent w-4 h-4" />
