@@ -16,6 +16,7 @@ import { normalizePhoneForSubmit, isValidRuPhone } from '../utils/phoneFormat';
 import { FiCheckCircle } from 'react-icons/fi';
 import { TimeRangeDisplay, SimpleTimeDisplay } from './TimezoneDisplay';
 
+
 const LoadingSpinner = () => (
   <div className="flex flex-col items-center justify-center p-10 bg-brand-background rounded-2xl">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-accent"></div>
@@ -377,11 +378,14 @@ const BookingForm = () => {
                             : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                         }`}
                       >
-                        <SimpleTimeDisplay
-                          utcTime={slot.slotTime}
+                        <TimeRangeDisplay
+                          startTime={slot.slotTime}
+                          endTime={slot.endTime}
                           isAdmin={false}
-                          className="inline"
+                          className="inline-flex flex-wrap items-center justify-center leading-tight"
                           clientTimezoneOverride={clientTimezone}
+                          showTimezoneLabel={true}
+                          timezoneLabelClassName="ml-1 text-xs font-medium text-brand-secondary"
                         />
                       </button>
                     ))
@@ -525,12 +529,14 @@ const BookingForm = () => {
                    <div className="mt-3 text-xs text-center text-brand-secondary">
                       <p>Вы записываетесь на <span className="font-semibold text-brand-text">{format(new Date(selectedSlot.slotTime), 'd MMMM yyyy', { locale: ru })}</span></p>
                       <div className="mt-2">
-                        <TimeRangeDisplay 
+                        <TimeRangeDisplay
                           startTime={selectedSlot.slotTime}
                           endTime={selectedSlot.endTime}
                           isAdmin={false}
-                          className="text-center"
+                          className="inline-flex flex-wrap items-center justify-center text-sm font-semibold text-brand-text"
                           clientTimezoneOverride={clientTimezone}
+                          showTimezoneLabel={true}
+                          timezoneLabelClassName="ml-1 text-xs font-medium text-brand-secondary"
                         />
                       </div>
                    </div>
