@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { parseISO } from 'date-fns';
+import { getCityByTimezone } from '../utils/russianCities';
 
 /**
  * Простой компонент для отображения времени
@@ -124,9 +124,9 @@ export const SimpleTimeDisplay = ({
 /**
  * Компонент для отображения временного диапазона
  */
-export const TimeRangeDisplay = ({ 
-  startTime, 
-  endTime, 
+export const TimeRangeDisplay = ({
+  startTime,
+  endTime,
   practitionerTimezone = null,
   isAdmin = false,
   className = '',
@@ -181,12 +181,75 @@ export const TimeRangeDisplay = ({
   };
 
   const timeRange = formatTimeRange(startTime, endTime);
-  const showMoscowLabel = !isAdmin && timezone === 'Europe/Moscow';
+  const timezoneMeta = useMemo(() => {
+    if (!timezone) return null;
+    try {
+      return getCityByTimezone(timezone);
+    } catch (_) {
+      return null;
+    }
+  }, [timezone]);
+
+  const timezoneLabel = useMemo(() => {
+    if (!timezone) return '';
+
+    let offset = '';
+    try {
+      const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: timezone, timeZoneName: 'short' }).formatToParts(new Date());
+      const shortName = parts.find(part => part.type === 'timeZoneName')?.value || '';
+      if (shortName) {
+        offset = shortName.replace('GMT', 'UTC');
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
+    if (!offset && timezoneMeta?.utcOffset) {
+      offset = `UTC${timezoneMeta.utcOffset}`;
+    }
+
+    if (!offset) {
+      try {
+        const now = new Date();
+        const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        const diffMinutes = Math.round((tzDate.getTime() - now.getTime()) / 60000);
+        const sign = diffMinutes >= 0 ? '+' : '-';
+        const absMinutes = Math.abs(diffMinutes);
+        const hours = Math.floor(absMinutes / 60).toString();
+        const minutes = absMinutes % 60;
+        const minutePart = minutes ? `:${minutes.toString().padStart(2, '0')}` : '';
+        offset = `UTC${sign}${hours}${minutePart}`;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    let cityName = timezoneMeta?.name;
+    if (!cityName && timezone) {
+      try {
+        const parts = timezone.split('/');
+        cityName = parts[parts.length - 1]?.replace(/_/g, ' ') || '';
+      } catch (_) {
+        cityName = '';
+      }
+    }
+
+    const pieces = [offset, cityName].filter(Boolean);
+    if (pieces.length === 0) {
+      return timezone;
+    }
+
+    return pieces.join(' · ');
+  }, [timezone, timezoneMeta]);
 
   return (
-    <span className={className}>
-      {timeRange}
-      {showMoscowLabel && <span className="text-xs text-gray-500 ml-1">Все времена указаны по московскому времени (UTC+3)</span>}
+    <span className={['inline-flex flex-wrap gap-x-1 gap-y-0.5', className].filter(Boolean).join(' ')}>
+      <span className="leading-tight">{timeRange}</span>
+      {timezoneLabel && (
+        <span className="text-xs font-normal text-brand-secondary/80 leading-tight">
+          {timezoneLabel}
+        </span>
+      )}
     </span>
   );
 };
