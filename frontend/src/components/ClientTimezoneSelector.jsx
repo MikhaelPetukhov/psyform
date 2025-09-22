@@ -26,12 +26,13 @@ const ClientTimezoneSelector = ({
   const [selectedCity, setSelectedCity] = useState(null);
   const [autoCardDismissed, setAutoCardDismissed] = useState(false);
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     // Автоопределение города клиента
     const detected = detectClosestRussianCity();
     setDetectedCity(detected);
-    
+
     // Если timezone не установлен, используем автоопределение
     if (!selectedTimezone) {
       setSelectedCity(detected);
@@ -46,6 +47,14 @@ const ClientTimezoneSelector = ({
       try { if (selectedTimezone === detected.timezone) setAutoCardDismissed(true); } catch (_) {}
     }
   }, [selectedTimezone, onTimezoneChange]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const handleCitySelect = (city) => {
     setSelectedCity(city);
@@ -131,7 +140,7 @@ const ClientTimezoneSelector = ({
                   Город: <strong>{detectedCity.name}</strong> (UTC{detectedCity.utcOffset})
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
-                  Текущее время: {new Date().toLocaleTimeString('ru-RU', { timeZone: detectedCity.timezone, hour12: false })}
+                  Текущее время: {now.toLocaleTimeString('ru-RU', { timeZone: detectedCity.timezone, hour12: false })}
                 </p>
               </div>
             </div>
@@ -193,9 +202,9 @@ const ClientTimezoneSelector = ({
               </div>
               <div className="text-sm text-gray-500">
                 {getUtcOffsetDisplay(showMoscowTime ? 'Europe/Moscow' : selectedCity?.timezone)} • {
-                  new Date().toLocaleTimeString('ru-RU', { 
+                  now.toLocaleTimeString('ru-RU', {
                     timeZone: showMoscowTime ? 'Europe/Moscow' : selectedCity?.timezone,
-                    hour12: false 
+                    hour12: false
                   })
                 }
               </div>
