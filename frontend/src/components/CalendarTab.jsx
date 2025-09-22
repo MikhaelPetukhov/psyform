@@ -102,6 +102,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
               slots={slotsForSelectedDate}
               loadingBookings={loadingBookings}
               loadingSlots={loadingSlots}
+              practitionerTimezone={practitionerTimezone}
               onCreateSlot={(date) => setCreateSlotOpen(date)}
               onManualBooking={(date) => setManualOpen(date)}
               onEventSelect={setSelectedEvent}
@@ -117,6 +118,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
               eventsForSelectedDate={eventsForSelectedDate}
               slotsForSelectedDate={slotsForSelectedDate}
               gridLoading={gridLoading}
+              practitionerTimezone={practitionerTimezone}
               onCurrentMonthChange={setCurrentMonth}
               onViewModeChange={setViewMode}
               onDateSelect={setSelectedDate}
