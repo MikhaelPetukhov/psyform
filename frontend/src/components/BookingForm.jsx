@@ -14,7 +14,7 @@ import { ru } from 'date-fns/locale';
 import 'react-day-picker/dist/style.css';
 import { normalizePhoneForSubmit, isValidRuPhone } from '../utils/phoneFormat';
 import { FiCheckCircle } from 'react-icons/fi';
-import { TimeRangeDisplay, SimpleTimeDisplay } from './TimezoneDisplay';
+import { TimeRangeDisplay } from './TimezoneDisplay';
 
 const LoadingSpinner = () => (
   <div className="flex flex-col items-center justify-center p-10 bg-brand-background rounded-2xl">
@@ -348,7 +348,7 @@ const BookingForm = () => {
                       startTime={selectedSlot.slotTime}
                       endTime={selectedSlot.endTime}
                       isAdmin={false}
-                      className="inline"
+                      className="inline-flex flex-wrap items-center leading-tight"
                       clientTimezoneOverride={clientTimezone}
                     />
                   </div>
@@ -377,10 +377,11 @@ const BookingForm = () => {
                             : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                         }`}
                       >
-                        <SimpleTimeDisplay
-                          utcTime={slot.slotTime}
+                        <TimeRangeDisplay
+                          startTime={slot.slotTime}
+                          endTime={slot.endTime}
                           isAdmin={false}
-                          className="inline"
+                          className="inline-flex flex-col text-left"
                           clientTimezoneOverride={clientTimezone}
                         />
                       </button>
@@ -409,7 +410,7 @@ const BookingForm = () => {
                         startTime={nextAvailableSlot.slot.slotTime}
                         endTime={nextAvailableSlot.slot.endTime}
                         isAdmin={false}
-                        className="inline"
+                        className="inline-flex flex-wrap items-center leading-tight"
                         clientTimezoneOverride={clientTimezone}
                       />
                     </div>
