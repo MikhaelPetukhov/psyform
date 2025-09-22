@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ClientTimezoneSelector from './ClientTimezoneSelector';
+import { getTimezoneOffsetInfo } from '../utils/russianCities';
 
 jest.mock('../utils/russianCities', () => {
   const actual = jest.requireActual('../utils/russianCities');
@@ -12,6 +13,11 @@ jest.mock('../utils/russianCities', () => {
 });
 
 const getUtcLabel = (timezone) => {
+  const { formattedOffset } = getTimezoneOffsetInfo(timezone);
+  if (formattedOffset) {
+    return formattedOffset;
+  }
+
   const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: timezone, timeZoneName: 'short' }).formatToParts(new Date());
   const name = parts.find(part => part.type === 'timeZoneName')?.value || '';
   return name.replace('GMT', 'UTC');
@@ -55,7 +61,7 @@ describe('ClientTimezoneSelector', () => {
   test('displays non-catalog timezone and restores it after toggling Moscow time', async () => {
     const { changeLog } = renderWithState();
 
-    const baseLabel = await screen.findByText('America/New_York');
+    const baseLabel = await screen.findByText('America/New_York (UTC−05:00)');
     const timezoneButton = baseLabel.closest('button');
     expect(timezoneButton).toBeTruthy();
 
@@ -80,7 +86,7 @@ describe('ClientTimezoneSelector', () => {
     await userEvent.click(toggle);
 
     expect(changeLog).toEqual(['Europe/Moscow', 'America/New_York']);
-    expect(within(timezoneButton).getByText('America/New_York')).toBeInTheDocument();
+    expect(within(timezoneButton).getByText('America/New_York (UTC−05:00)')).toBeInTheDocument();
     expect(within(timezoneButton).getByText((content) => content.startsWith(baseOffset))).toBeInTheDocument();
     expect(within(timezoneButton).getByText((content) => content.includes(baseTime))).toBeInTheDocument();
   });
