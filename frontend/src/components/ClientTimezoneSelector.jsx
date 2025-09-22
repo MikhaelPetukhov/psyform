@@ -1,12 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FiMapPin, FiCheck } from 'react-icons/fi';
-import { TOP_CITIES, OTHER_CITIES, detectClosestRussianCity } from '../utils/russianCities';
+import { TOP_CITIES, OTHER_CITIES, detectClosestRussianCity, getCityByTimezone } from '../utils/russianCities';
 import CityTimezonePicker from './CityTimezonePicker';
 
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MOSCOW_CITY = TOP_CITIES.find(city => city.timezone === MOSCOW_TIMEZONE) || {
   name: 'Москва',
   timezone: MOSCOW_TIMEZONE
+};
+
+const getBrowserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (_) {
+    return null;
+  }
+};
+
+const createCityByTimezone = (timezone) => {
+  if (!timezone) return null;
+  const matchedCity = getCityByTimezone(timezone);
+  return matchedCity ? { ...matchedCity } : { name: timezone, timezone };
 };
 
 function getUtcOffsetDisplay(timezone) {
@@ -35,30 +49,129 @@ const ClientTimezoneSelector = ({
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   const moscowOverrideRef = useRef(false);
+  const confirmedTimezoneRef = useRef(null);
+  const selectedTimezoneRef = useRef(selectedTimezone);
+  const selectedCityRef = useRef(selectedCity);
+  const detectedCityRef = useRef(detectedCity);
+  const autoCardDismissedRef = useRef(autoCardDismissed);
+
+  useEffect(() => {
+    selectedTimezoneRef.current = selectedTimezone;
+  }, [selectedTimezone]);
+
+  useEffect(() => {
+    selectedCityRef.current = selectedCity;
+  }, [selectedCity]);
+
+  useEffect(() => {
+    detectedCityRef.current = detectedCity;
+  }, [detectedCity]);
+
+  useEffect(() => {
+    autoCardDismissedRef.current = autoCardDismissed;
+  }, [autoCardDismissed]);
+
+  const checkTimezoneChange = useCallback(() => {
+    const browserTimezone = getBrowserTimezone();
+    if (!browserTimezone) {
+      return;
+    }
+
+    if (!confirmedTimezoneRef.current) {
+      confirmedTimezoneRef.current = browserTimezone;
+    }
+
+    const currentSelectedTimezone = selectedTimezoneRef.current
+      || selectedCityRef.current?.timezone
+      || null;
+
+    if (currentSelectedTimezone === browserTimezone) {
+      if (confirmedTimezoneRef.current !== browserTimezone) {
+        confirmedTimezoneRef.current = browserTimezone;
+      }
+
+      const detectedForBrowser = createCityByTimezone(browserTimezone);
+      const currentDetected = detectedCityRef.current;
+
+      if (
+        detectedForBrowser &&
+        (
+          !currentDetected
+          || currentDetected.timezone !== detectedForBrowser.timezone
+          || currentDetected.name !== detectedForBrowser.name
+        )
+      ) {
+        setDetectedCity(detectedForBrowser);
+        detectedCityRef.current = detectedForBrowser;
+      }
+
+      if (!autoCardDismissedRef.current) {
+        setAutoCardDismissed(true);
+        autoCardDismissedRef.current = true;
+      }
+
+      return;
+    }
+
+    if (confirmedTimezoneRef.current !== browserTimezone) {
+      const detectedForBrowser = createCityByTimezone(browserTimezone);
+      const currentDetected = detectedCityRef.current;
+
+      if (
+        detectedForBrowser &&
+        (
+          !currentDetected
+          || currentDetected.timezone !== detectedForBrowser.timezone
+          || currentDetected.name !== detectedForBrowser.name
+        )
+      ) {
+        setDetectedCity(detectedForBrowser);
+        detectedCityRef.current = detectedForBrowser;
+      }
+
+      if (autoCardDismissedRef.current) {
+        setAutoCardDismissed(false);
+        autoCardDismissedRef.current = false;
+      }
+    }
+  }, [setAutoCardDismissed, setDetectedCity]);
 
   useEffect(() => {
     const detected = detectClosestRussianCity();
     setDetectedCity(detected);
+    detectedCityRef.current = detected;
 
     if (!selectedTimezone) {
       if (detected?.timezone) {
-        setSelectedCity(() => ({ ...detected }));
+        const normalizedDetectedCity = { ...detected };
+        setSelectedCity(normalizedDetectedCity);
+        selectedCityRef.current = normalizedDetectedCity;
         setPreviousNonMoscowTimezone(detected.timezone);
         onTimezoneChange(detected.timezone);
         setAutoCardDismissed(true);
+        autoCardDismissedRef.current = true;
+        confirmedTimezoneRef.current = detected.timezone;
       }
       return;
     }
 
     if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
-      const allCities = [...TOP_CITIES, ...OTHER_CITIES];
-      const matchedCity = allCities.find(c => c.timezone === selectedTimezone);
-      const cityToSet = matchedCity ? { ...matchedCity } : { name: selectedTimezone, timezone: selectedTimezone };
-      setSelectedCity(prev => (prev?.timezone === selectedTimezone ? prev : cityToSet));
+      const cityToSet = createCityByTimezone(selectedTimezone);
+      if (cityToSet) {
+        setSelectedCity(prev => {
+          if (prev?.timezone === selectedTimezone) {
+            return prev;
+          }
+          selectedCityRef.current = cityToSet;
+          return cityToSet;
+        });
+      }
     }
 
     if (detected?.timezone && selectedTimezone === detected.timezone) {
       setAutoCardDismissed(true);
+      autoCardDismissedRef.current = true;
+      confirmedTimezoneRef.current = detected.timezone;
     }
 
     if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
@@ -69,6 +182,21 @@ const ClientTimezoneSelector = ({
       moscowOverrideRef.current = false;
     }
   }, [selectedTimezone, onTimezoneChange]);
+
+  useEffect(() => {
+    checkTimezoneChange();
+    const intervalId = setInterval(checkTimezoneChange, 60000);
+
+    return () => clearInterval(intervalId);
+  }, [checkTimezoneChange]);
+
+  useEffect(() => {
+    const browserTimezone = getBrowserTimezone();
+    if (browserTimezone && selectedTimezone === browserTimezone) {
+      confirmedTimezoneRef.current = browserTimezone;
+    }
+    checkTimezoneChange();
+  }, [selectedTimezone, checkTimezoneChange]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -83,6 +211,7 @@ const ClientTimezoneSelector = ({
 
     const normalizedCity = { ...city };
     setSelectedCity(normalizedCity);
+    selectedCityRef.current = normalizedCity;
     setPreviousNonMoscowTimezone(normalizedCity.timezone);
     moscowOverrideRef.current = false;
     onTimezoneChange(normalizedCity.timezone);
@@ -92,8 +221,14 @@ const ClientTimezoneSelector = ({
     try {
       if (detectedCity && detectedCity.timezone === normalizedCity.timezone) {
         setAutoCardDismissed(true);
+        autoCardDismissedRef.current = true;
       }
     } catch (_) { /* ignore */ }
+
+    const browserTimezone = getBrowserTimezone();
+    if (browserTimezone && browserTimezone === normalizedCity.timezone) {
+      confirmedTimezoneRef.current = browserTimezone;
+    }
   };
 
   const handleTimezoneFromPicker = (timezone, meta) => {
