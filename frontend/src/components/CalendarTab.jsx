@@ -70,21 +70,23 @@ const months = Array.from({ length: 12 }, (_, i) =>
   format(new Date(2025, i, 1), 'LLLL', { locale: ru })
 );
 
+const toGCalDate = (d) => {
+  const iso = new Date(d).toISOString();
+  // 2025-08-29T12:30:00.000Z -> 20250829T123000Z
+  return iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+};
+
+export const buildGoogleCalendarUrl = (booking, practitionerTimezone = 'Europe/Moscow') => {
+  if (!booking) return '';
+  const text = encodeURIComponent(`Сессия: ${booking.clientName}`);
+  const details = encodeURIComponent(`Телефон: ${booking.clientPhone || '—'}`);
+  const dates = `${toGCalDate(booking.start)}/${toGCalDate(booking.end)}`;
+  const timezone = encodeURIComponent(practitionerTimezone || 'Europe/Moscow');
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}&ctz=${timezone}`;
+};
+
 const BookingDetailsModal = ({ booking, onClose, practitionerTimezone, onUpdated, onReschedule }) => {
   if (!booking) return null;
-
-  const toGCalDate = (d) => {
-    const iso = new Date(d).toISOString();
-    // 2025-08-29T12:30:00.000Z -> 20250829T123000Z
-    return iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  };
-  const buildGoogleCalendarUrl = (b) => {
-    const text = encodeURIComponent(`Сессия: ${b.clientName}`);
-    const details = encodeURIComponent(`Телефон: ${b.clientPhone || '—'}`);
-    const dates = `${toGCalDate(b.start)}/${toGCalDate(b.end)}`;
-    const ctz = encodeURIComponent('Europe/Moscow');
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}&ctz=${ctz}`;
-  };
 
   const handleCopyLink = async () => {
     try {
@@ -105,6 +107,18 @@ const BookingDetailsModal = ({ booking, onClose, practitionerTimezone, onUpdated
       onClose();
     } catch (e) {
       toast.error(e?.response?.data?.msg || 'Не удалось отменить запись');
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    try {
+      const calendarUrl = buildGoogleCalendarUrl(booking, practitionerTimezone);
+      if (typeof window === 'undefined') {
+        throw new Error('no window');
+      }
+      window.open(calendarUrl, '_blank', 'noopener,noreferrer');
+    } catch (_) {
+      toast.error('Не удалось открыть Google Calendar');
     }
   };
 
@@ -171,6 +185,13 @@ const BookingDetailsModal = ({ booking, onClose, practitionerTimezone, onUpdated
             onClick={handleCopyLink}
             className="px-3 py-2 rounded-lg border text-sm bg-white hover:bg-gray-50"
           >Скопировать ссылку</button>
+          <button
+            onClick={handleAddToCalendar}
+            className="px-3 py-2 rounded-lg border text-sm bg-white hover:bg-gray-50 flex items-center justify-center gap-2"
+          >
+            <FiCalendar />
+            В Google Calendar
+          </button>
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
