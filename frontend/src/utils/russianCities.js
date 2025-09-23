@@ -98,42 +98,168 @@ export const getCityByTimezone = (timezone) => {
   return RUSSIAN_CITIES.find(city => city.timezone === timezone);
 };
 
+const MINUS_SIGN = '\u2212';
+
+const parseOffsetFromTimeZoneName = (value) => {
+  if (!value) return null;
+  if (/^(GMT|UTC)$/.test(value)) {
+    return 0;
+  }
+
+  const match = value.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return null;
+
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = parseInt(match[2], 10);
+  const minutes = match[3] ? parseInt(match[3], 10) : 0;
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  return sign * (hours * 60 + minutes);
+};
+
+const resolveOffsetMinutes = (timezone, option) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: option
+    });
+    const parts = formatter.formatToParts(new Date());
+    const namePart = parts.find(part => part.type === 'timeZoneName');
+    return parseOffsetFromTimeZoneName(namePart?.value);
+  } catch (_) {
+    return null;
+  }
+};
+
+const computeOffsetMinutes = (timezone) => {
+  if (!timezone) return null;
+
+  const options = ['shortOffset', 'short'];
+  for (const option of options) {
+    const minutes = resolveOffsetMinutes(timezone, option);
+    if (minutes !== null) {
+      return minutes;
+    }
+  }
+
+  try {
+    const now = new Date();
+    const localeString = now.toLocaleString('en-US', { timeZone: timezone });
+    const tzDate = new Date(localeString);
+    if (!Number.isNaN(tzDate.getTime())) {
+      return Math.round((tzDate.getTime() - now.getTime()) / 60000);
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+};
+
+const formatOffsetMinutes = (offsetMinutes) => {
+  if (typeof offsetMinutes !== 'number' || Number.isNaN(offsetMinutes)) {
+    return '';
+  }
+
+  const sign = offsetMinutes < 0 ? MINUS_SIGN : '+';
+  const absMinutes = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(absMinutes / 60)).padStart(2, '0');
+  const minutes = String(absMinutes % 60).padStart(2, '0');
+
+  return `UTC${sign}${hours}:${minutes}`;
+};
+
+export const getTimezoneOffsetInfo = (timezone) => {
+  const offsetMinutes = computeOffsetMinutes(timezone);
+  const formattedOffset = formatOffsetMinutes(offsetMinutes);
+
+  return {
+    offsetMinutes,
+    formattedOffset
+  };
+};
+
+const getFallbackName = (timezone, formattedOffset) => {
+  if (!timezone) return '';
+  return formattedOffset ? `${timezone} (${formattedOffset})` : timezone;
+};
+
+export const createTimezoneInfo = (timezone) => {
+  if (!timezone) return null;
+
+  const city = getCityByTimezone(timezone);
+  const { offsetMinutes, formattedOffset } = getTimezoneOffsetInfo(timezone);
+
+  if (city) {
+    return {
+      ...city,
+      timezone,
+      isFallback: false,
+      formattedUtcOffset: formattedOffset,
+      offsetMinutes
+    };
+  }
+
+  const normalizedOffset = formattedOffset ? formattedOffset.replace('UTC', '').trim() : null;
+
+  return {
+    name: getFallbackName(timezone, formattedOffset),
+    timezone,
+    region: null,
+    utcOffset: normalizedOffset,
+    formattedUtcOffset: formattedOffset,
+    offsetMinutes,
+    isFallback: true,
+    originalTimezone: timezone
+  };
+};
+
 // Получить локализованное имя часового пояса
 export const getTimezoneLabel = (timezone) => {
-  const city = getCityByTimezone(timezone);
-  if (city) {
-    return `${city.name} (UTC${city.utcOffset})`;
+  const info = createTimezoneInfo(timezone);
+  if (!info) {
+    return timezone || '';
   }
-  return timezone;
+
+  if (info.isFallback) {
+    return info.name;
+  }
+
+  const offset = info.utcOffset
+    || (info.formattedUtcOffset ? info.formattedUtcOffset.replace('UTC', '').trim() : '');
+
+  return offset ? `${info.name} (UTC${offset})` : info.name;
 };
 
 // Автоопределение ближайшего российского города по timezone браузера
 export const detectClosestRussianCity = () => {
   try {
     const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
+    const timezone = browserTimezone || 'UTC';
+
     // Сначала точное совпадение
-    const exactMatch = RUSSIAN_CITIES.find(city => city.timezone === browserTimezone);
-    if (exactMatch) return exactMatch;
-    
-    // Если точного совпадения нет, попробуем по UTC offset
-    const now = new Date();
-    const browserOffset = -now.getTimezoneOffset() / 60; // В часах
-    
-    const offsetMatches = RUSSIAN_CITIES.filter(city => {
-      const cityOffset = parseInt(city.utcOffset.replace('+', ''));
-      return cityOffset === browserOffset;
-    });
-    
-    if (offsetMatches.length > 0) {
-      // Предпочитаем крупные города
-      const topCityMatch = offsetMatches.find(city => TOP_CITIES.includes(city));
-      return topCityMatch || offsetMatches[0];
+    const exactMatch = RUSSIAN_CITIES.find(city => city.timezone === timezone);
+    if (exactMatch) return createTimezoneInfo(exactMatch.timezone);
+
+    const { offsetMinutes: browserOffsetMinutes } = getTimezoneOffsetInfo(timezone);
+
+    if (typeof browserOffsetMinutes === 'number') {
+      const offsetMatches = RUSSIAN_CITIES.filter(city => {
+        const { offsetMinutes } = getTimezoneOffsetInfo(city.timezone);
+        return typeof offsetMinutes === 'number' && offsetMinutes === browserOffsetMinutes;
+      });
+
+      if (offsetMatches.length > 0) {
+        const topCityMatch = offsetMatches.find(city => TOP_CITIES.includes(city));
+        const chosenCity = topCityMatch || offsetMatches[0];
+        return createTimezoneInfo(chosenCity.timezone);
+      }
     }
-    
-    // По умолчанию Москва
-    return RUSSIAN_CITIES[0]; // Москва
+
+    return createTimezoneInfo(timezone);
   } catch (e) {
-    return RUSSIAN_CITIES[0]; // Москва по умолчанию
+    return createTimezoneInfo('UTC');
   }
 };

@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FiMapPin, FiCheck } from 'react-icons/fi';
-import { TOP_CITIES, OTHER_CITIES, detectClosestRussianCity, getCityByTimezone } from '../utils/russianCities';
+import {
+  TOP_CITIES,
+  OTHER_CITIES,
+  detectClosestRussianCity,
+  createTimezoneInfo,
+  getTimezoneOffsetInfo
+} from '../utils/russianCities';
 import CityTimezonePicker from './CityTimezonePicker';
+
 
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MOSCOW_CITY = TOP_CITIES.find(city => city.timezone === MOSCOW_TIMEZONE) || {
@@ -25,6 +32,12 @@ const createCityByTimezone = (timezone) => {
 
 function getUtcOffsetDisplay(timezone) {
   if (!timezone) return '';
+
+  const { formattedOffset } = getTimezoneOffsetInfo(timezone);
+  if (formattedOffset) {
+    return formattedOffset;
+  }
+
   try {
     const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: timezone, timeZoneName: 'short' }).formatToParts(new Date());
     const name = parts.find(p => p.type === 'timeZoneName')?.value || '';
@@ -138,40 +151,31 @@ const ClientTimezoneSelector = ({
 
   useEffect(() => {
     const detected = detectClosestRussianCity();
-    setDetectedCity(detected);
+
     detectedCityRef.current = detected;
+    if (!selectedTimezoneRef.current && detected?.timezone) {
+      selectedCityRef.current = detected;
+    }
+
+    setDetectedCity(detected);
+  }, []);
+
+  useEffect(() => {
+    selectedTimezoneRef.current = selectedTimezone;
 
     if (!selectedTimezone) {
-      if (detected?.timezone) {
-        const normalizedDetectedCity = { ...detected };
-        setSelectedCity(normalizedDetectedCity);
-        selectedCityRef.current = normalizedDetectedCity;
-        setPreviousNonMoscowTimezone(detected.timezone);
-        onTimezoneChange(detected.timezone);
-        setAutoCardDismissed(true);
-        autoCardDismissedRef.current = true;
-        confirmedTimezoneRef.current = detected.timezone;
+      setSelectedCity(null);
+      selectedCityRef.current = null;
+      if (!moscowOverrideRef.current) {
+        setPreviousNonMoscowTimezone(null);
       }
       return;
     }
 
-    if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
-      const cityToSet = createCityByTimezone(selectedTimezone);
-      if (cityToSet) {
-        setSelectedCity(prev => {
-          if (prev?.timezone === selectedTimezone) {
-            return prev;
-          }
-          selectedCityRef.current = cityToSet;
-          return cityToSet;
-        });
-      }
-    }
-
-    if (detected?.timezone && selectedTimezone === detected.timezone) {
-      setAutoCardDismissed(true);
-      autoCardDismissedRef.current = true;
-      confirmedTimezoneRef.current = detected.timezone;
+    const normalizedCity = createTimezoneInfo(selectedTimezone);
+    if (normalizedCity) {
+      setSelectedCity(prev => (prev?.timezone === selectedTimezone ? prev : normalizedCity));
+      selectedCityRef.current = normalizedCity;
     }
 
     if (selectedTimezone !== MOSCOW_TIMEZONE || !moscowOverrideRef.current) {
@@ -181,7 +185,14 @@ const ClientTimezoneSelector = ({
     if (selectedTimezone !== MOSCOW_TIMEZONE && moscowOverrideRef.current) {
       moscowOverrideRef.current = false;
     }
-  }, [selectedTimezone, onTimezoneChange]);
+  }, [selectedTimezone]);
+
+
+  useEffect(() => {
+    if (detectedCity?.timezone && selectedTimezone === detectedCity.timezone) {
+      setAutoCardDismissed(true);
+    }
+  }, [detectedCity, selectedTimezone]);
 
   useEffect(() => {
     checkTimezoneChange();
@@ -209,7 +220,9 @@ const ClientTimezoneSelector = ({
   const handleCitySelect = (city) => {
     if (!city?.timezone) return;
 
-    const normalizedCity = { ...city };
+    const normalizedCity = createTimezoneInfo(city.timezone);
+    if (!normalizedCity) return;
+
     setSelectedCity(normalizedCity);
     selectedCityRef.current = normalizedCity;
     setPreviousNonMoscowTimezone(normalizedCity.timezone);
@@ -311,7 +324,11 @@ const ClientTimezoneSelector = ({
               <div>
                 <h4 className="text-sm font-medium text-blue-800">Ваше время определено автоматически</h4>
                 <p className="text-sm text-blue-700 mt-1">
-                  Город: <strong>{detectedCity.name}</strong> ({getUtcOffsetDisplay(detectedCity.timezone)})
+                  {detectedCity.isFallback ? (
+                    <>Часовой пояс: <strong>{detectedCity.name}</strong></>
+                  ) : (
+                    <>Город: <strong>{detectedCity.name}</strong> ({getUtcOffsetDisplay(detectedCity.timezone)})</>
+                  )}
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
                   Текущее время: {now.toLocaleTimeString('ru-RU', { timeZone: detectedCity.timezone, hour12: false })}
