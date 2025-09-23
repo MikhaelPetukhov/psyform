@@ -5,7 +5,8 @@ import {
   OTHER_CITIES,
   detectClosestRussianCity,
   createTimezoneInfo,
-  getTimezoneOffsetInfo
+  getTimezoneOffsetInfo,
+  getCityByTimezone
 } from '../utils/russianCities';
 import CityTimezonePicker from './CityTimezonePicker';
 
