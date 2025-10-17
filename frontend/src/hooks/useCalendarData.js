@@ -14,6 +14,7 @@ const mapBooking = (booking) => ({
   status: booking.status,
   clientConfirmation: booking.clientConfirmation,
   preferredContact: booking.preferredContact,
+  sourceTimezone: booking.sourceTimezone,
 });
 
 const flattenSlots = (slotGroups) => {

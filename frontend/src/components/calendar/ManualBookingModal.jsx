@@ -8,6 +8,7 @@ import 'cleave.js/dist/addons/cleave-phone.i18n';
 
 import { normalizePhoneForSubmit } from '../../utils/phoneFormat';
 import { createBooking, getScheduleSettings, searchClients } from '../../api/calendar';
+import { useI18n } from '../../locale/i18n';
 
 const ManualBookingModal = ({
   defaultDate,
@@ -15,6 +16,7 @@ const ManualBookingModal = ({
   onCreated,
   practitionerTimezone = 'Europe/Moscow',
 }) => {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [telegram, setTelegram] = useState('');
@@ -120,10 +122,10 @@ const ManualBookingModal = ({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg w-96 shadow-lg flex flex-col gap-3">
-        <h4 className="text-lg font-semibold mb-1">Назначить сессию</h4>
+        <h4 className="text-lg font-semibold mb-1">{t('manualBookingModal.title')}</h4>
         <div className="grid grid-cols-2 gap-2">
           <div className="col-span-1">
-            <label className="text-xs text-gray-500">Дата</label>
+            <label className="text-xs text-gray-500">{t('manualBookingModal.date')}</label>
             <input
               type="date"
               value={dateStr}
@@ -133,7 +135,7 @@ const ManualBookingModal = ({
             />
           </div>
           <div className="col-span-1">
-            <label className="text-xs text-gray-500">Начало</label>
+            <label className="text-xs text-gray-500">{t('manualBookingModal.start')}</label>
             <input
               type="time"
               value={timeStart}
@@ -145,7 +147,7 @@ const ManualBookingModal = ({
             />
           </div>
           <div className="col-span-1">
-            <label className="text-xs text-gray-500">Окончание</label>
+            <label className="text-xs text-gray-500">{t('manualBookingModal.end')}</label>
             <input
               type="time"
               value={timeEnd}
@@ -159,11 +161,11 @@ const ManualBookingModal = ({
           </div>
         </div>
         <div className="relative" ref={suggestionsRef}>
-          <label className="text-xs text-gray-500">Имя</label>
+          <label className="text-xs text-gray-500">{t('manualBookingModal.name')}</label>
           <input
             type="text"
             required
-            placeholder="Имя"
+            placeholder={t('manualBookingModal.placeholders.name')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             onFocus={() => suggestions.length && setShowSuggestions(true)}
@@ -186,7 +188,7 @@ const ManualBookingModal = ({
             </ul>
           )}
         </div>
-        <label className="text-xs text-gray-500">Телефон</label>
+        <label className="text-xs text-gray-500">{t('manualBookingModal.phone')}</label>
         <Cleave
           options={{ phone: true, phoneRegionCode: 'RU' }}
           value={phone}
@@ -198,20 +200,20 @@ const ManualBookingModal = ({
             setPhone(value);
           }}
           className="border rounded px-2 py-1 text-sm"
-          placeholder="+7 977 288-14-99"
+          placeholder={t('manualBookingModal.placeholders.phone')}
           required
         />
-        <label className="text-xs text-gray-500">Telegram</label>
+        <label className="text-xs text-gray-500">{t('manualBookingModal.telegram')}</label>
         <input
           type="text"
-          placeholder="Telegram"
+          placeholder={t('manualBookingModal.placeholders.telegram')}
           value={telegram}
           onChange={(event) => setTelegram(event.target.value)}
           className="border rounded px-2 py-1 text-sm"
         />
-        <label className="text-xs text-gray-500">Комментарий</label>
+        <label className="text-xs text-gray-500">{t('manualBookingModal.comment')}</label>
         <textarea
-          placeholder="Комментарий (необязательно)"
+          placeholder={t('manualBookingModal.comment')}
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           rows="3"
@@ -219,14 +221,14 @@ const ManualBookingModal = ({
         />
         <div className="flex justify-end gap-2 mt-2">
           <button type="button" onClick={onClose} className="px-3 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200">
-            Отмена
+            {t('manualBookingModal.cancel')}
           </button>
           <button
             type="submit"
             disabled={loading}
             className="px-3 py-1 rounded text-sm bg-brand-accent text-white"
           >
-            {loading ? 'Сохранение...' : 'Создать'}
+            {loading ? t('manualBookingModal.saving') : t('manualBookingModal.create')}
           </button>
         </div>
       </form>

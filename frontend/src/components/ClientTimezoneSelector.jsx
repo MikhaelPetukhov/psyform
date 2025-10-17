@@ -161,6 +161,52 @@ const ClientTimezoneSelector = ({
     setDetectedCity(detected);
   }, []);
 
+  // Внешний триггер: открыть глобальный поиск города
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('clientTz.openPicker') === '1') {
+        localStorage.removeItem('clientTz.openPicker');
+        setIsOpen(false);
+        setIsCityModalOpen(true);
+        setTimeout(() => {
+          try {
+            const input = document.getElementById('city-timezone-search');
+            if (input && input.focus) input.focus();
+          } catch (_) {}
+        }, 60);
+      }
+    } catch (_) {}
+  }, []);
+
+  // Немедленное открытие по кастомному событию (используется кнопкой «Изменить» в BookingForm)
+  useEffect(() => {
+    const handler = () => {
+      setIsOpen(false);
+      setIsCityModalOpen(true);
+      setTimeout(() => {
+        try {
+          const input = document.getElementById('city-timezone-search');
+          if (input && input.focus) input.focus();
+        } catch (_) {}
+      }, 60);
+    };
+    try { window.addEventListener('clientTz:openPicker', handler); } catch (_) {}
+    return () => { try { window.removeEventListener('clientTz:openPicker', handler); } catch (_) {} };
+  }, []);
+
+  // Фокус на поиске при открытии модалки выбора города
+  useEffect(() => {
+    if (isCityModalOpen) {
+      const t = setTimeout(() => {
+        try {
+          const input = document.getElementById('city-timezone-search');
+          if (input && input.focus) input.focus();
+        } catch (_) {}
+      }, 60);
+      return () => clearTimeout(t);
+    }
+  }, [isCityModalOpen]);
+
   useEffect(() => {
     selectedTimezoneRef.current = selectedTimezone;
 
@@ -246,9 +292,29 @@ const ClientTimezoneSelector = ({
   };
 
   const handleTimezoneFromPicker = (timezone, meta) => {
-    const picked = { name: meta?.name || timezone, timezone };
-    handleCitySelect(picked);
+    if (!timezone) return;
+    const normalizedCity = createTimezoneInfo(timezone, meta || {});
+    if (!normalizedCity) return;
+
+    setSelectedCity(normalizedCity);
+    selectedCityRef.current = normalizedCity;
+    setPreviousNonMoscowTimezone(normalizedCity.timezone);
+    moscowOverrideRef.current = false;
+    onTimezoneChange(normalizedCity.timezone);
     setIsCityModalOpen(false);
+    setShowMoscowTime(false);
+
+    try {
+      if (detectedCity && detectedCity.timezone === normalizedCity.timezone) {
+        setAutoCardDismissed(true);
+        autoCardDismissedRef.current = true;
+      }
+    } catch (_) { /* ignore */ }
+
+    const browserTimezone = getBrowserTimezone();
+    if (browserTimezone && browserTimezone === normalizedCity.timezone) {
+      confirmedTimezoneRef.current = browserTimezone;
+    }
   };
 
   const toggleMoscowTime = () => {
@@ -285,7 +351,16 @@ const ClientTimezoneSelector = ({
     return (
       <div className="relative">
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            setIsOpen(false);
+            setIsCityModalOpen(true);
+            setTimeout(() => {
+              try {
+                const input = document.getElementById('city-timezone-search');
+                if (input && input.focus) input.focus();
+              } catch (_) {}
+            }, 60);
+          }}
           className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
         >
           <FiMapPin className="w-4 h-4" />
@@ -315,7 +390,7 @@ const ClientTimezoneSelector = ({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" id="client-tz-selector">
       {/* Автоопределение */}
       {detectedCity && !autoCardDismissed && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -383,7 +458,16 @@ const ClientTimezoneSelector = ({
       {/* Выбор города */}
       <div>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            setIsOpen(false);
+            setIsCityModalOpen(true);
+            setTimeout(() => {
+              try {
+                const input = document.getElementById('city-timezone-search');
+                if (input && input.focus) input.focus();
+              } catch (_) {}
+            }, 60);
+          }}
           className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg bg-white hover:border-gray-400 transition-colors"
         >
           <div className="flex items-center gap-2">

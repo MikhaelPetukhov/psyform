@@ -17,6 +17,7 @@ import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 import { getBookingStatusClass } from '../../utils/bookingStatus';
 import ContactIcon from './ContactIcon';
 import { SimpleTimeDisplay } from '../TimezoneDisplay';
+import { useI18n } from '../../locale/i18n';
 
 const CalendarView = ({
   currentMonth,
@@ -34,6 +35,7 @@ const CalendarView = ({
   onCreateSlot,
   onEventSelect,
 }) => {
+  const { t } = useI18n();
   const [hoveredDate, setHoveredDate] = useState(null);
 
   const monthMatrix = useMemo(() => {
@@ -71,6 +73,11 @@ const CalendarView = ({
     const weekStart = startOfWeek(currentMonth, { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   }, [currentMonth]);
+
+  const dowShort = useMemo(() => {
+    const arr = t('schedule.dowShort');
+    return Array.isArray(arr) ? arr : ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  }, [t]);
 
   const handleNext = () => {
     if (viewMode === 'month') {
@@ -136,7 +143,7 @@ const CalendarView = ({
                     onCreateSlot(dayInfo.date);
                   }}
                   className="absolute bottom-2 right-2 w-7 h-7 bg-gray-900 hover:bg-black text-white rounded-full flex items-center justify-center text-xs"
-                  title="Создать слот"
+                  title={t('calendarView.createSlotTitle')}
                 >
                   <FiPlus />
                 </button>
@@ -197,7 +204,7 @@ const CalendarView = ({
                 </li>
               ))}
               {dayEvents.length === 0 && (
-                <li className="sidebar__list-item text-gray-500">Нет записей</li>
+                <li className="sidebar__list-item text-gray-500">{t('calendarView.noEntries')}</li>
               )}
             </ul>
           </div>
@@ -239,7 +246,7 @@ const CalendarView = ({
             </li>
           ))}
           {eventsForSelectedDate.length === 0 && (
-            <li className="sidebar__list-item text-gray-500">На этот день записей нет</li>
+            <li className="sidebar__list-item text-gray-500">{t('calendarView.noEntriesToday')}</li>
           )}
         </ul>
       </div>
@@ -252,7 +259,7 @@ const CalendarView = ({
         <div className="flex items-center gap-3">
           <button
             onClick={handlePrev}
-            aria-label="Предыдущий период"
+            aria-label={t('calendarView.prev')}
             className="w-8 h-8 flex items-center justify-center rounded-full border hover:bg-gray-50"
           >
             <FiChevronLeft />
@@ -260,7 +267,7 @@ const CalendarView = ({
           <div className="text-lg font-medium">{format(currentMonth, 'LLLL yyyy', { locale: ru })}</div>
           <button
             onClick={handleNext}
-            aria-label="Следующий период"
+            aria-label={t('calendarView.next')}
             className="w-8 h-8 flex items-center justify-center rounded-full border hover:bg-gray-50"
           >
             <FiChevronRight />
@@ -272,7 +279,7 @@ const CalendarView = ({
             type="button"
             className="px-3 py-1 rounded-full text-sm border bg-white hover:bg-gray-50"
           >
-            Сегодня
+            {t('calendarView.today')}
           </button>
           <div className="inline-flex bg-gray-100 rounded-full p-1">
             <button
@@ -280,28 +287,28 @@ const CalendarView = ({
               onClick={() => handleViewChange('month')}
               className={`px-3 py-1 rounded-full text-sm ${viewMode === 'month' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}
             >
-              Месяц
+              {t('calendarView.month')}
             </button>
             <button
               type="button"
               onClick={() => handleViewChange('week')}
               className={`px-3 py-1 rounded-full text-sm ${viewMode === 'week' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}
             >
-              Неделя
+              {t('calendarView.week')}
             </button>
             <button
               type="button"
               onClick={() => handleViewChange('day')}
               className={`px-3 py-1 rounded-full text-sm ${viewMode === 'day' ? 'bg-gray-900 text-white' : 'text-gray-700'}`}
             >
-              День
+              {t('calendarView.day')}
             </button>
           </div>
         </div>
       </div>
       {viewMode !== 'day' && (
         <div className="grid grid-cols-7 text-xs text-gray-500 mb-2">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayLabel) => (
+          {dowShort.map((dayLabel) => (
             <div key={dayLabel} className="text-center">
               {dayLabel}
             </div>

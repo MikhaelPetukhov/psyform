@@ -183,10 +183,20 @@ export const getTimezoneOffsetInfo = (timezone) => {
 
 const getFallbackName = (timezone, formattedOffset) => {
   if (!timezone) return '';
-  return formattedOffset ? `${timezone} (${formattedOffset})` : timezone;
+  // Try to use the city part of IANA tz, e.g. "Asia/Bangkok" -> "Bangkok"
+  try {
+    const parts = String(timezone).split('/');
+    let city = parts[parts.length - 1] || timezone;
+    city = city.replace(/_/g, ' ');
+    // If looks like Etc/GMT+3 or similar, fallback to timezone itself
+    const pretty = /Etc\/GMT/i.test(timezone) ? timezone : city;
+    return formattedOffset ? `${pretty} (${formattedOffset})` : pretty;
+  } catch (_) {
+    return formattedOffset ? `${timezone} (${formattedOffset})` : timezone;
+  }
 };
 
-export const createTimezoneInfo = (timezone) => {
+export const createTimezoneInfo = (timezone, preferred = {}) => {
   if (!timezone) return null;
 
   const city = getCityByTimezone(timezone);
@@ -205,9 +215,9 @@ export const createTimezoneInfo = (timezone) => {
   const normalizedOffset = formattedOffset ? formattedOffset.replace('UTC', '').trim() : null;
 
   return {
-    name: getFallbackName(timezone, formattedOffset),
+    name: preferred.name || getFallbackName(timezone, formattedOffset),
     timezone,
-    region: null,
+    region: preferred.admin1 || preferred.region || null,
     utcOffset: normalizedOffset,
     formattedUtcOffset: formattedOffset,
     offsetMinutes,

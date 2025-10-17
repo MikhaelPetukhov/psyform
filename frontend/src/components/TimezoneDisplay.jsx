@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { parseISO } from 'date-fns';
 import { getCityByTimezone } from '../utils/russianCities';
+import { useI18n } from '../locale/i18n';
 
 /**
  * Простой компонент для отображения времени
@@ -15,6 +16,7 @@ const TimezoneDisplay = ({
   className = '',
   clientTimezoneOverride = null,
 }) => {
+  const { t } = useI18n();
 
   // Определяем часовой пояс
   const timezone = useMemo(() => {
@@ -95,7 +97,7 @@ const TimezoneDisplay = ({
   return (
     <span className={className}>
       {timeString}
-      {showMoscowLabel && <span className="text-xs text-gray-500 ml-1">Все времена указаны по московскому времени (UTC+3)</span>}
+      {showMoscowLabel && <span className="text-xs text-gray-500 ml-1">{t('timezoneDisplay.moscowLabel')}</span>}
     </span>
   );
 };

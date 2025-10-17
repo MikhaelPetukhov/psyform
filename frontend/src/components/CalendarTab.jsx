@@ -16,8 +16,10 @@ import { useCalendarData } from '../hooks/useCalendarData';
 import { useNowInTimezone } from '../hooks/useNowInTimezone';
 import { deleteSlot } from '../api/calendar';
 import '../styles/calendar.css';
+import { useI18n } from '../locale/i18n';
 
 const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
+  const { t } = useI18n();
   const { events, slots, loadingBookings, loadingSlots, refreshData } = useCalendarData();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -63,14 +65,14 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
   );
 
   const handleSlotDelete = async (slot) => {
-    if (!window.confirm('Удалить этот слот?')) return;
+    if (!window.confirm(t('calendarTab.confirm.deleteSlot'))) return;
 
     try {
       await deleteSlot(slot.id);
       refreshData();
-      toast.success('Слот удален');
+      toast.success(t('calendarTab.toasts.slotDeleted'));
     } catch (error) {
-      const message = error?.response?.data?.msg || 'Ошибка удаления слота';
+      const message = error?.response?.data?.msg || t('calendarTab.toasts.slotDeleteFailed');
       toast.error(message);
     }
   };
@@ -90,7 +92,6 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
       <CalendarHeader
         nowStr={nowStr}
         zoneLabel={zoneLabel}
-        onTimezoneClick={() => toast('Выбор часового пояса появится скоро')}
       />
 
       <div className="max-w-[1200px] mx-auto px-4">
@@ -167,17 +168,17 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 70 }}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] overflow-auto relative">
             <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-white">
-              <h3 className="text-lg font-semibold">Настройки расписания</h3>
+              <h3 className="text-lg font-semibold">{t('calendarTab.settingsTitle')}</h3>
               <div className="flex gap-2">
                 <button type="button" className="px-3 py-1 text-sm border rounded" onClick={handleGoToday}>
-                  Сегодня
+                  {t('calendarTab.today')}
                 </button>
                 <button
                   type="button"
                   className="px-3 py-1 text-sm rounded bg-gray-100 hover:bg-gray-200"
                   onClick={() => setSettingsOpen(false)}
                 >
-                  Закрыть
+                  {t('calendarTab.close')}
                 </button>
               </div>
             </div>
@@ -193,6 +194,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
         booking={rescheduleOpen}
         onClose={() => setRescheduleOpen(null)}
         onRescheduled={refreshData}
+        practitionerTimezone={practitionerTimezone}
       />
 
       <div className="menu-backdrop" onClick={() => setMenuOpen(false)}></div>
@@ -209,7 +211,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
               type="button"
             >
               <FiSettings />
-              <span>Настройки</span>
+              <span>{t('calendarTab.menu.settings')}</span>
             </button>
             <button
               className="mt-2 w-full flex items-center gap-2 px-3 py-2 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
@@ -217,7 +219,7 @@ const CalendarTab = ({ practitionerTimezone = 'Europe/Moscow' }) => {
               type="button"
             >
               <FiLogOut />
-              <span>Выйти из профиля</span>
+              <span>{t('calendarTab.menu.logout')}</span>
             </button>
           </div>
         </div>

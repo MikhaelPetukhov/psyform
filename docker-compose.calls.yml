@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  jitsi-prosody:
+    image: jitsi/prosody:${JITSI_TAG:-stable-8719}
+    restart: unless-stopped
+    networks: [ calls_net ]
+    expose:
+      - "5222"
+      - "5347"
+      - "5280"
+    environment:
+      - XMPP_DOMAIN=${JITSI_XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${JITSI_XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_MUC_DOMAIN=${JITSI_XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=jwt
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-0}
+      # JWT config: must match the tokens you generate in backend
+      - JWT_APP_ID=${JITSI_JWT_APP_ID}
+      - JWT_APP_SECRET=${JITSI_JWT_APP_SECRET}
+      - JWT_ACCEPTED_AUDIENCES=${JITSI_JWT_AUD}
+      - JWT_ACCEPTED_ISSUERS=${JITSI_JWT_ISS}
+      - JWT_ALLOW_EMPTY=0
+      - TZ=${TZ:-Europe/Moscow}
+    volumes:
+      - jitsi_config:/config
+
+  jitsi-web:
+    image: jitsi/web:${JITSI_TAG:-stable-8719}
+    restart: unless-stopped
+    networks: [ calls_net ]
+    depends_on:
+      - jitsi-prosody
+    ports:
+      - "8443:443"
+      - "8000:80"
+    environment:
+      - PUBLIC_URL=${PUBLIC_URL}
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=jwt
+      - ENABLE_GUESTS=${ENABLE_GUESTS:-0}
+      - XMPP_DOMAIN=${JITSI_XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${JITSI_XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - XMPP_MUC_DOMAIN=${JITSI_XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      - XMPP_BOSH_URL_BASE=http://jitsi-prosody:5280
+      - ENABLE_LETSENCRYPT=0
+      # Use custom self-signed or mkcert certs mounted at /config/keys
+      - ENABLE_CUSTOM_CERTS=1
+      - TLS_CERT=/config/keys/tls.crt
+      - TLS_KEY=/config/keys/tls.key
+      - TZ=${TZ:-Europe/Moscow}
+      # TURN/TURNS integration variables differ by docker-jitsi-meet version.
+      # Consult docs/calls/l2-compose.md and the image docs for the exact names.
+      # Example (static credentials; may vary by version):
+      - TURN_CREDENTIALS=${TURN_STATIC_USER}:${TURN_STATIC_PASSWORD}@${COTURN_PUBLIC_HOST}:3478
+      - TURNS_CREDENTIALS=${TURN_STATIC_USER}:${TURN_STATIC_PASSWORD}@${COTURN_PUBLIC_HOST}:5349?transport=tcp
+    volumes:
+      - jitsi_config:/config
+      # Self-signed or mkcert certificates go here as tls.crt/tls.key
+      - ./calls/certs:/config/keys:ro
+
+  jitsi-jicofo:
+    image: jitsi/jicofo:${JITSI_TAG:-stable-8719}
+    restart: unless-stopped
+    networks: [ calls_net ]
+    depends_on:
+      - jitsi-prosody
+    environment:
+      - XMPP_DOMAIN=${JITSI_XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${JITSI_XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - TZ=${TZ:-Europe/Moscow}
+    volumes:
+      - jitsi_config:/config
+
+  jitsi-jvb:
+    image: jitsi/jvb:${JITSI_TAG:-stable-8719}
+    restart: unless-stopped
+    networks: [ calls_net ]
+    depends_on:
+      - jitsi-prosody
+    ports:
+      - "10000:10000/udp"
+    environment:
+      - XMPP_DOMAIN=${JITSI_XMPP_DOMAIN:-meet.jitsi}
+      - XMPP_AUTH_DOMAIN=${JITSI_XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      - DOCKER_HOST_ADDRESS=${DOCKER_HOST_ADDRESS:-host.docker.internal}
+      - JVB_ENABLE_APIS=rest
+      - TZ=${TZ:-Europe/Moscow}
+    volumes:
+      - jitsi_config:/config
+
+  coturn:
+    image: coturn/coturn:${COTURN_TAG:-4.6.2}
+    restart: unless-stopped
+    networks: [ calls_net ]
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+    volumes:
+      - ./calls/certs:/certs:ro
+    command: >
+      sh -c "
+      turnserver \
+      --log-file=stdout \
+      --no-cli \
+      --fingerprint \
+      --lt-cred-mech \
+      --user=${TURN_STATIC_USER}:${TURN_STATIC_PASSWORD} \
+      --realm=${TURN_REALM} \
+      --cert=/certs/tls.crt \
+      --pkey=/certs/tls.key \
+      --listening-port=3478 \
+      --tls-listening-port=5349 \
+      --min-port=49152 \
+      --max-port=65535 \
+      --external-ip=${COTURN_EXTERNAL_IP}
+      "
+
+networks:
+  calls_net:
+
+volumes:
+  jitsi_config:

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { Op } = require('sequelize');
 const logger = require('../config/logger');
 const { Client, Practitioner, TgAuthCode, Booking } = require('../models');
+const { getTzLabel, formatRangeInTz } = require('../utils/timez');
 
 let bot = null;
 // In-memory map to store pending login tokens per Telegram user until they share contact
@@ -168,26 +169,26 @@ async function sendAuthCode(ctx, client, forcedCode = null, options = {}) {
     return;
   }
 
-  let practitionerSlug = opts.practitionerSlug || null;
-  if (!practitionerSlug && opts.practitioner) {
-    practitionerSlug = opts.practitioner.slug || opts.practitioner.publicSlug || null;
-  }
-  if (!practitionerSlug && resolvedPractitionerId) {
+  // Always require a practitioner slug (prefer publicSlug) to include in magic-link p= parameter
+  let practitionerSlug = null;
+  if (opts.practitioner) {
+    practitionerSlug = opts.practitioner.publicSlug || opts.practitioner.slug || null;
+  } else if (resolvedPractitionerId) {
     try {
       const p = await Practitioner.findByPk(resolvedPractitionerId);
-      if (p) practitionerSlug = p.slug || p.publicSlug || null;
+      if (p) practitionerSlug = p.publicSlug || p.slug || null;
     } catch (_) { /* ignore */ }
   }
   if (!practitionerSlug) {
-    const fallbackSlug = (process.env.DEFAULT_PRACTITIONER_SLUG || '').trim();
-    practitionerSlug = fallbackSlug || null;
+    await ctx.reply('❌ Не удалось определить психолога, вернитесь в форму и попробуйте ещё раз.');
+    return;
   }
 
   const postLoginPath = (process.env.POST_LOGIN_REDIRECT || '').trim();
   const rParam = postLoginPath && postLoginPath.startsWith('/')
     ? `&r=${encodeURIComponent(Buffer.from(postLoginPath, 'utf8').toString('base64url'))}`
     : '';
-  const link = `${baseUrl.replace(/\/$/, '')}/api/auth/magic?t=${encodeURIComponent(code)}${practitionerSlug ? `&p=${encodeURIComponent(practitionerSlug)}` : ''}${rParam}`;
+  const link = `${baseUrl.replace(/\/$/, '')}/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(practitionerSlug)}${rParam}`;
 
   await ctx.reply(
     `🔐 Теперь нажмите кнопку ниже, чтобы войти на сайт (ссылка действует ${ttl} минут):`,
@@ -216,10 +217,11 @@ async function sendAdminAuthCode(ctx, identity, forcedCode = null) {
 
 async function sendReminderMessage(client, booking) {
   const dt = new Date(booking.slotTime);
-  const tz = process.env.TIMEZONE || 'Europe/Moscow';
+  const tz = (client && client.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
   const dateStr = dt.toLocaleString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const tzLabel = getTzLabel(tz);
 
-  const text = `Напоминание: завтра у вас сессия в ${dateStr}. Подтвердите, пожалуйста.`;
+  const text = `Напоминание: завтра у вас сессия в ${dateStr}${tzLabel}. Подтвердите, пожалуйста.`;
 
   const keyboard = Markup.inlineKeyboard([
     [
@@ -353,46 +355,35 @@ function startTelegramBot() {
           }
         }
 
+        // Require slug passed via deep-link; if missing or practitioner not found, stop
+        if (!pendingSlug) {
+          await ctx.reply('❌ Не удалось определить психолога, вернитесь в форму и попробуйте ещё раз.');
+          return;
+        }
+
         let practitioner = null;
-        if (pendingSlug) {
-          try {
-            practitioner = await Practitioner.findOne({
-              where: {
-                [Op.or]: [
-                  { publicSlug: pendingSlug },
-                  { slug: pendingSlug },
-                ],
-              },
-            });
-          } catch (_) { /* ignore */ }
-        }
+        try {
+          practitioner = await Practitioner.findOne({
+            where: {
+              [Op.or]: [
+                { publicSlug: pendingSlug },
+                { slug: pendingSlug },
+              ],
+            },
+          });
+        } catch (_) { /* ignore */ }
+
         if (!practitioner) {
-          const fallbackSlug = (process.env.DEFAULT_PRACTITIONER_SLUG || '').trim();
-          if (fallbackSlug) {
-            try {
-              practitioner = await Practitioner.findOne({
-                where: {
-                  [Op.or]: [
-                    { slug: fallbackSlug },
-                    { publicSlug: fallbackSlug },
-                  ],
-                },
-              });
-            } catch (_) { /* ignore */ }
-          }
+          await ctx.reply('❌ Не удалось определить психолога, вернитесь в форму и попробуйте ещё раз.');
+          return;
         }
 
-        const extraPayload = { tgPhone: phone };
-        if (practitioner && practitioner.id) {
-          extraPayload.practitionerId = practitioner.id;
-        }
+        const extraPayload = { tgPhone: phone, practitionerId: practitioner.id };
         const client = await createOrUpdateClientFromCtx(ctx, extraPayload);
-
-        const practitionerId = practitioner?.id || client?.practitionerId || null;
 
         await sendAuthCode(ctx, client, pendingToken || null, {
           practitioner,
-          practitionerId,
+          practitionerId: practitioner.id,
         });
 
         if (pendingEntryRaw) pendingLoginTokens.delete(tgUserIdStr);
@@ -406,7 +397,7 @@ function startTelegramBot() {
   bot.on('callback_query', async (ctx) => {
     try {
       const data = ctx.callbackQuery.data || '';
-      const tz = process.env.TIMEZONE || 'Europe/Moscow';
+      // Используем рабочую таймзону психолога
       const fromId = String(ctx.from?.id || '');
 
       async function ensureOwnership(booking) {
@@ -433,7 +424,9 @@ function startTelegramBot() {
           const p = await Practitioner.findByPk(booking.practitionerId);
           if (!p || !p.tgChatId) return;
           const dt = new Date(booking.slotTime);
+          const tz = p.timezone || 'Europe/Moscow';
           const dateStr = dt.toLocaleString('ru-RU', { timeZone: tz, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          const tzLabel = getTzLabel(tz);
           const name = booking.clientName || 'клиент';
           let extra = { disable_web_page_preview: true };
           try {
@@ -446,7 +439,7 @@ function startTelegramBot() {
           } catch (_) { /* ignore */ }
           const title = actionText === 'declined' ? 'Отмена записи' : 'Подтверждение записи';
           const line = actionText === 'declined' ? 'отменил' : 'подтвердил';
-          await bot.telegram.sendMessage(p.tgChatId, `${title}: ${name} ${line} приём на ${dateStr} (МСК).`, extra);
+          await bot.telegram.sendMessage(p.tgChatId, `${title}: ${name} ${line} приём на ${dateStr}${tzLabel}.`, extra);
         } catch (_) { /* ignore */ }
       }
 
@@ -538,32 +531,15 @@ async function sendBookingConfirmationRequest(booking) {
 
     const practitioner = await Practitioner.findByPk(booking.practitionerId);
     const practitionerName = practitioner ? practitioner.displayName : 'Психолог';
-    
-    const slotTime = new Date(booking.slotTime);
-    const endTime = new Date(booking.endTime);
-    
-    const dateStr = slotTime.toLocaleDateString('ru-RU', { 
-      timeZone: 'Europe/Moscow',
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric' 
-    });
-    
-    const timeStr = `${slotTime.toLocaleTimeString('ru-RU', { 
-      timeZone: 'Europe/Moscow',
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })}-${endTime.toLocaleTimeString('ru-RU', { 
-      timeZone: 'Europe/Moscow',
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })}`;
+
+    const tzClient = (booking.client?.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
+    const { dateStr, timeStr, tzLabel } = formatRangeInTz(booking.slotTime, booking.endTime, tzClient);
 
     const message = `📅 Подтвердите, пожалуйста, вашу запись:
 
 👨‍⚕️ Психолог: ${practitionerName}
 📆 Дата: ${dateStr}
-🕐 Время: ${timeStr} (МСК)
+🕐 Время: ${timeStr}${tzLabel}
 
 Подтверждаете ли вы участие в этой сессии?`;
 
@@ -599,11 +575,12 @@ async function notifyClientReminder(booking, when = '24h') {
   if (!client || !client.tgChatId) return false;
 
   const dt = new Date(booking.slotTime);
-  const tz = process.env.TIMEZONE || 'Europe/Moscow';
+  const tz = (client && client.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
   const dateStr = dt.toLocaleString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const tzLabel = getTzLabel(tz);
   let text = when === '1h'
-    ? `Напоминание: через 1 час у вас сессия (${dateStr}). Подтвердите, пожалуйста.`
-    : `Напоминание: завтра у вас сессия (${dateStr}). Подтвердите, пожалуйста.`;
+    ? `Напоминание: через 1 час у вас сессия (${dateStr})${tzLabel}. Подтвердите, пожалуйста.`
+    : `Напоминание: завтра у вас сессия (${dateStr})${tzLabel}. Подтвердите, пожалуйста.`;
 
   const keyboard = Markup.inlineKeyboard([
     [
@@ -618,10 +595,11 @@ async function notifyClientReminder(booking, when = '24h') {
 
 async function sendNewBookingMessage(client, booking) {
   const dt = new Date(booking.slotTime);
-  const tz = process.env.TIMEZONE || 'Europe/Moscow';
+  const tz = (client && client.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
   const dateStr = dt.toLocaleString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const tzLabel = getTzLabel(tz);
 
-  const text = `Создана запись на ${dateStr}. Пожалуйста, подтвердите.`;
+  const text = `Создана запись на ${dateStr}${tzLabel}. Пожалуйста, подтвердите.`;
 
   const keyboard = Markup.inlineKeyboard([
     [
@@ -649,10 +627,8 @@ async function notifyPractitionerNewBooking(booking) {
   try {
     const p = await Practitioner.findByPk(booking.practitionerId);
     if (!p || !p.tgChatId) return false;
-    const { formatTimeWithZone, createTimeRange } = require('../utils/timezone');
-    const timeRange = createTimeRange(booking.slotTime, booking.endTime, booking.sourceTimezone || 'Europe/Moscow');
-    const moscowTime = formatTimeWithZone(booking.slotTime, 'Europe/Moscow');
-    const dateStr = `${moscowTime.time} ${moscowTime.date}`;
+    const tz = p.timezone || 'Europe/Moscow';
+    const { dateStr, timeStr, tzLabel } = formatRangeInTz(booking.slotTime, booking.endTime, tz);
     const name = booking.clientName || 'клиент';
 
     // Optional link to admin panel
@@ -665,7 +641,7 @@ async function notifyPractitionerNewBooking(booking) {
       }
     } catch (_) { /* ignore */ }
 
-    await bot.telegram.sendMessage(p.tgChatId, `Новая запись: ${name} — ${dateStr}.`, extra);
+    await bot.telegram.sendMessage(p.tgChatId, `Новая запись: ${name} — ${dateStr} ${timeStr}${tzLabel}.`, extra);
     return true;
   } catch (_) {
     return false;
@@ -680,8 +656,10 @@ async function notifyBookingCreated(booking) {
   if (!client || !client.tgChatId) return false;
 
   const dt = new Date(booking.slotTime);
-  const tz = process.env.TIMEZONE || 'Europe/Moscow';
-  const dateStr = dt.toLocaleString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const tz = (client && client.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
+  const dateStr = dt.toLocaleDateString('ru-RU', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = dt.toLocaleTimeString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+  const tzLabel = getTzLabel(tz);
   let practitionerName = 'специалисту';
   let text = '';
   try {
@@ -691,12 +669,12 @@ async function notifyBookingCreated(booking) {
         practitionerName = p.displayName || practitionerName;
         const tmpl = p.clientMessageTemplate;
         if (tmpl && tmpl.trim()) {
-          const timeStr = dt.toLocaleTimeString('ru-RU', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+          const timeWithTz = `${timeStr}${tzLabel}`;
           const vars = {
             '{{clientName}}': client.firstName || client.tgUsername || 'клиент',
             '{{practitionerName}}': practitionerName,
             '{{date}}': dateStr,
-            '{{time}}': timeStr,
+            '{{time}}': timeWithTz,
           };
           text = Object.keys(vars).reduce((acc, k) => acc.split(k).join(vars[k]), tmpl);
         }
@@ -704,7 +682,7 @@ async function notifyBookingCreated(booking) {
     }
   } catch (_) { /* ignore and fallback */ }
   if (!text) {
-    text = `Вы записаны на приём к ${practitionerName} на ${dateStr}.\nСсылка на видеосессию придёт ближе к началу сеанса.`;
+    text = `Вы записаны на приём к ${practitionerName} на ${dateStr} в ${timeStr}${tzLabel}.\nСсылка на видеосессию придёт ближе к началу сеанса.`;
   }
 
   try {
@@ -716,6 +694,9 @@ async function notifyBookingCreated(booking) {
 }
 
 function getBot() { return bot; }
+
+// Test-only helper to inject fake bot instance
+function __setTestBot(fake) { bot = fake; }
 
 const sendRescheduleNotification = async (booking, oldStart, oldEnd) => {
   if (!bot) {
@@ -730,18 +711,18 @@ const sendRescheduleNotification = async (booking, oldStart, oldEnd) => {
       return;
     }
 
-    const oldTime = formatBookingTime(oldStart, oldEnd);
-    const newTime = formatBookingTime(booking.slotTime, booking.endTime);
+    // Форматирование интервалов в TZ клиента с подписью
+    const tz = (booking && booking.client && booking.client.clientTimezone) || booking?.sourceTimezone || process.env.TIMEZONE || 'Europe/Moscow';
+    const oldTime = formatRangeInTz(oldStart, oldEnd, tz);
+    const newTime = formatRangeInTz(booking.slotTime, booking.endTime, tz);
 
     const message = `📅 *Время вашей сессии изменено*\n\n` +
-      `Старое время: ${oldTime}\n` +
-      `Новое время: ${newTime}\n\n` +
+      `Старое время: ${oldTime.dateStr} ${oldTime.timeStr}${oldTime.tzLabel}\n` +
+      `Новое время: ${newTime.dateStr} ${newTime.timeStr}${newTime.tzLabel}\n\n` +
       `Клиент: ${booking.clientName}\n\n` +
       `Если у вас есть вопросы, свяжитесь с психологом.`;
-
     await bot.telegram.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     logger.info(`Reschedule notification sent to client ${booking.client.clientName}`);
-
   } catch (error) {
     logger.error(`Error sending reschedule notification: ${error.message}`);
     throw error;
@@ -751,7 +732,6 @@ const sendRescheduleNotification = async (booking, oldStart, oldEnd) => {
 module.exports = { 
   startTelegramBot, 
   getBot, 
-  sendReminder, 
   hashCode, 
   notifyNewShortNoticeBooking, 
   notifyBookingCreated, 
@@ -759,5 +739,6 @@ module.exports = {
   notifyPractitionerNewBooking, 
   notifyClientReminder,
   sendBookingConfirmationRequest,
-  sendRescheduleNotification
+  sendRescheduleNotification,
+  __setTestBot
 };

@@ -14,14 +14,14 @@ module.exports = {
 
     const [rows] = await queryInterface.sequelize.query(
       `SELECT id FROM "Practitioners" WHERE slug = :slug LIMIT 1`,
-      { replacements: { slug: 'mikhael' } }
+      { replacements: { slug: 'virtualsect' } }
     );
 
     if (!rows || rows.length === 0) {
       const id = randomUUID();
       await queryInterface.bulkInsert('Practitioners', [{
         id,
-        slug: 'mikhael',
+        slug: 'virtualsect',
         displayName: 'Mikhael',
         plan: 'free',
         tgUserId: null,

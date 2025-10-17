@@ -335,14 +335,39 @@ router.post('/create', authMiddleware, adminOnly, idempotency('slots'), slotsLim
       return res.status(400).json({ msg: 'Время пересекается с существующим слотом' });
     }
 
-    // Создаём слот
-    const slot = await AvailableSlot.create({
-      slotTime: slotTimeUTC,
-      endTime: endTimeUTC,
-      sourceTimezone: timezone,
-      practitionerId,
-      isBooked: false
-    });
+    // Создаём слот (с защитой от гонок уникальности)
+    let slot;
+    try {
+      slot = await AvailableSlot.create({
+        slotTime: slotTimeUTC,
+        endTime: endTimeUTC,
+        sourceTimezone: timezone,
+        practitionerId,
+        isBooked: false
+      });
+    } catch (e) {
+      const isUnique = e && (e.name === 'SequelizeUniqueConstraintError' || e.original?.code === '23505');
+      if (isUnique) {
+        // Найдём уже созданный слот и вернём как успех (идемпотентность)
+        const existing = await AvailableSlot.findOne({ where: { practitionerId, slotTime: slotTimeUTC, endTime: endTimeUTC } });
+        if (existing) {
+          const timeFormatted = formatSlotTime(existing.slotTime, existing.sourceTimezone);
+          const endTimeFormatted = formatSlotTime(existing.endTime, existing.sourceTimezone);
+          const payload = {
+            id: existing.id,
+            startTime: timeFormatted,
+            endTime: endTimeFormatted,
+            sourceTimezone: existing.sourceTimezone,
+            isBooked: existing.isBooked,
+            slotTime: existing.slotTime.toISOString(),
+            endTime: existing.endTime.toISOString()
+          };
+          return res.json({ msg: 'Слот уже создан (идемпотентность)', ...payload, slot: { ...payload } });
+        }
+      }
+      // Иное — пробрасываем в общий catch
+      throw e;
+    }
 
     // Возвращаем с форматированием времени
     const timeFormatted = formatSlotTime(slot.slotTime, slot.sourceTimezone);
@@ -408,14 +433,37 @@ router.post('/', authMiddleware, adminOnly, idempotency('slots'), slotsLimiter, 
       return res.status(400).json({ msg: 'Время пересекается с существующим слотом' });
     }
 
-    // Создаём слот
-    const slot = await AvailableSlot.create({
-      slotTime: slotTimeUTC,
-      endTime: endTimeUTC,
-      sourceTimezone: timezone,
-      practitionerId,
-      isBooked: false
-    });
+    // Создаём слот (с защитой от гонок уникальности)
+    let slot;
+    try {
+      slot = await AvailableSlot.create({
+        slotTime: slotTimeUTC,
+        endTime: endTimeUTC,
+        sourceTimezone: timezone,
+        practitionerId,
+        isBooked: false
+      });
+    } catch (e) {
+      const isUnique = e && (e.name === 'SequelizeUniqueConstraintError' || e.original?.code === '23505');
+      if (isUnique) {
+        const existing = await AvailableSlot.findOne({ where: { practitionerId, slotTime: slotTimeUTC, endTime: endTimeUTC } });
+        if (existing) {
+          const timeFormatted = formatSlotTime(existing.slotTime, existing.sourceTimezone);
+          const endTimeFormatted = formatSlotTime(existing.endTime, existing.sourceTimezone);
+          const payload = {
+            id: existing.id,
+            startTime: timeFormatted,
+            endTime: endTimeFormatted,
+            sourceTimezone: existing.sourceTimezone,
+            isBooked: existing.isBooked,
+            slotTime: existing.slotTime.toISOString(),
+            endTime: existing.endTime.toISOString()
+          };
+          return res.json({ msg: 'Слот уже создан (идемпотентность)', ...payload, slot: { ...payload } });
+        }
+      }
+      throw e;
+    }
 
     // Возвращаем с форматированием времени
     const timeFormatted = formatSlotTime(slot.slotTime, slot.sourceTimezone);

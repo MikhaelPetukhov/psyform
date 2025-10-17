@@ -2,13 +2,15 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
-import BookingForm from './components/BookingForm';
+import ValidatedBooking from './components/ValidatedBooking';
 import Landing from './components/Landing';
 import AdminApp from './components/AdminApp';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthCallback from './components/AuthCallback';
 import AdminLanding from './components/AdminLanding';
+import AdminLogin from './components/AdminLogin';
 import './App.css';
+import CallPage from './components/calls/CallPage';
 
 function App() {
 
@@ -46,10 +48,14 @@ function App() {
       />
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/p/:slug" element={<BookingForm />} />
+        <Route path="/p/:slug" element={<ValidatedBooking />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         {/* Public landing with Telegram admin login button */}
         <Route path="/psychologist" element={<AdminLanding />} />
+        {/* Local login page for admin (username/password) */}
+        <Route path="/psychologist/login" element={<AdminLogin />} />
+        {/* Public call embed page (host/guest) */}
+        <Route path="/calls/:roomId" element={<CallPage />} />
         {/* Protected personal admin panel by slug */}
         <Route path="/psychologist/:slug" element={<ProtectedRoute />}>
           <Route index element={<AdminApp />} />

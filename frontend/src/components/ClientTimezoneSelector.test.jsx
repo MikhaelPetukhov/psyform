@@ -61,7 +61,7 @@ describe('ClientTimezoneSelector', () => {
   test('displays non-catalog timezone and restores it after toggling Moscow time', async () => {
     const { changeLog } = renderWithState();
 
-    const baseLabel = await screen.findByText('America/New_York (UTC−05:00)');
+    const baseLabel = await screen.findByText('New York (UTC−05:00)');
     const timezoneButton = baseLabel.closest('button');
     expect(timezoneButton).toBeTruthy();
 
@@ -86,7 +86,7 @@ describe('ClientTimezoneSelector', () => {
     await userEvent.click(toggle);
 
     expect(changeLog).toEqual(['Europe/Moscow', 'America/New_York']);
-    expect(within(timezoneButton).getByText('America/New_York (UTC−05:00)')).toBeInTheDocument();
+    expect(within(timezoneButton).getByText('New York (UTC−05:00)')).toBeInTheDocument();
     expect(within(timezoneButton).getByText((content) => content.startsWith(baseOffset))).toBeInTheDocument();
     expect(within(timezoneButton).getByText((content) => content.includes(baseTime))).toBeInTheDocument();
   });

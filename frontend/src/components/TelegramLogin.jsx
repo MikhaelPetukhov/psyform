@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../api';
+import { useI18n } from '../locale/i18n';
 
 function TelegramLogin({ onLogin, forceModal = false }) {
+  const { t } = useI18n();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
@@ -35,6 +37,12 @@ function TelegramLogin({ onLogin, forceModal = false }) {
     } catch (e) {
       setMe(null);
       if (typeof onLogin === 'function') onLogin(null);
+      const status = e?.response?.status;
+      if (status === 401 || status === 403) {
+        try {
+          await api.post('/auth/tg/logout');
+        } catch (_) {}
+      }
     } finally {
       setLoading(false);
     }
@@ -72,7 +80,7 @@ function TelegramLogin({ onLogin, forceModal = false }) {
     try {
       const { data } = await api.post('/auth/tg/verify', { code: authCode.trim() });
       setMe(data?.client || null);
-      toast.success('Авторизация через Telegram выполнена');
+      toast.success(t('telegramLogin.toasts.loginOk'));
       if (typeof onLogin === 'function') onLogin(data?.client || null);
       setCodeInputVisible(false);
       setAuthCode('');
@@ -82,7 +90,7 @@ function TelegramLogin({ onLogin, forceModal = false }) {
         setOverlayFadeOut(false);
       }, 450);
     } catch (err) {
-      const msg = err.response?.data?.message || 'Неверный код';
+      const msg = err.response?.data?.message || t('telegramLogin.errors.loginFailed');
       toast.error(msg);
     } finally {
       setVerifying(false);
@@ -97,6 +105,8 @@ function TelegramLogin({ onLogin, forceModal = false }) {
       const slug = (params.get('p') || '').trim();
       if (slug) {
         try { localStorage.setItem('practitionerSlug', slug); } catch (_) {}
+        try { localStorage.setItem('practitionerPublicSlug', slug); } catch (_) {}
+        try { if (typeof window !== 'undefined') window.__PRACTITIONER_PUBLIC_SLUG__ = slug; } catch (_) {}
       }
       if (!codeParam) return;
 
@@ -110,10 +120,10 @@ function TelegramLogin({ onLogin, forceModal = false }) {
           // Signal BookingForm to auto-open calendar/modal
           try { localStorage.setItem('autoOpenBooking', '1'); } catch (_) {}
           try { window.dispatchEvent(new Event('tg-login-success')); } catch (_) {}
-          toast.success('Авторизация через Telegram выполнена');
+          toast.success(t('telegramLogin.toasts.loginOk'));
           if (typeof onLogin === 'function') onLogin(data?.client || null);
         } catch (err) {
-          const msg = err.response?.data?.message || 'Не удалось подтвердить вход';
+          const msg = err.response?.data?.message || t('telegramLogin.errors.loginFailed');
           toast.error(msg);
         } finally {
           setVerifying(false);
@@ -143,7 +153,7 @@ function TelegramLogin({ onLogin, forceModal = false }) {
       console.error('Failed to log out client session', err);
     }
     setMe(null);
-    toast.success('Вы вышли из аккаунта клиента');
+    toast.success(t('telegramLogin.toasts.logoutOk'));
     if (typeof onLogin === 'function') onLogin(null);
   };
 
@@ -153,7 +163,7 @@ function TelegramLogin({ onLogin, forceModal = false }) {
       <div className="px-6 py-4 rounded-xl bg-white shadow-lg border border-gray-200 text-sm">
         <div className="flex items-center gap-3">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-accent"></div>
-          <div className="text-brand-text">Авторизуем через Telegram…</div>
+          <div className="text-brand-text">{t('telegramLogin.overlayVerifying')}</div>
         </div>
       </div>
     </div>
@@ -162,6 +172,12 @@ function TelegramLogin({ onLogin, forceModal = false }) {
   if (loading) {
     return (
       <div className="p-3 bg-gray-50 rounded-lg text-sm text-brand-secondary">Проверяем авторизацию...</div>
+    );
+  }
+  
+  if (loading) {
+    return (
+      <div className="p-3 bg-gray-50 rounded-lg text-sm text-brand-secondary">{t('telegramLogin.checkingAuth')}</div>
     );
   }
 
@@ -173,9 +189,9 @@ function TelegramLogin({ onLogin, forceModal = false }) {
           {me?.firstName ? me.firstName.charAt(0) : 'TG'}
         </div>
         <div className="text-xs text-brand-text font-medium">
-          {me?.tgUsername ? `@${me.tgUsername}` : (me?.firstName || 'Клиент')}
+          {me?.tgUsername ? `@${me.tgUsername}` : (me?.firstName || 'TG')}
         </div>
-        <button onClick={handleLogout} className="text-[11px] text-red-600 hover:underline">Выйти</button>
+        <button onClick={handleLogout} className="text-[11px] text-red-600 hover:underline">{t('telegramLogin.logout')}</button>
       </div>
     </div>
   );
@@ -221,47 +237,55 @@ function TelegramLogin({ onLogin, forceModal = false }) {
       return '';
     };
 
-    // Generate login link with nonce
+    // Generate login link with nonce (requires publicSlug)
     const generateLoginLink = () => {
+      const publicSlug = getCurrentPublicSlug();
+      if (!publicSlug) return '#';
       const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const botUsername = botInfo.username || 'PsyForm_bot';
-      const publicSlug = getCurrentPublicSlug();
-      const slugPart = publicSlug ? `_${base64UrlEncode(publicSlug)}` : '';
+      const slugPart = `_${base64UrlEncode(publicSlug)}`;
       return `https://t.me/${botUsername}?start=login_${nonce}${slugPart}`;
     };
+
+    const slugMissing = !getCurrentPublicSlug();
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div className="mx-4 p-6 rounded-2xl border border-gray-200 bg-white shadow-2xl max-w-md w-full">
-          <div className="text-lg text-brand-text font-semibold mb-4 text-center">Авторизация через Telegram</div>
+          <div className="text-lg text-brand-text font-semibold mb-4 text-center">{t('telegramLogin.title')}</div>
           <div className="text-sm text-brand-secondary space-y-3 mb-6">
-            <p>Для входа на сайт:</p>
+            <p>{t('telegramLogin.stepsIntro')}</p>
             <ol className="list-decimal list-inside space-y-2 ml-4">
-              <li>Нажмите кнопку "Войти через Telegram" ниже</li>
-              <li>Поделитесь своим контактом в боте</li>
-              <li>Нажмите кнопку "Войти на сайт" в боте</li>
-              <li>Вы автоматически вернётесь на сайт авторизованным</li>
+              <li>{t('telegramLogin.steps.one')}</li>
+              <li>{t('telegramLogin.steps.two')}</li>
+              <li>{t('telegramLogin.steps.three')}</li>
+              <li>{t('telegramLogin.steps.four')}</li>
             </ol>
           </div>
           <div className="text-center space-y-3">
             {!codeInputVisible ? (
               <>
-                <a 
-                  href={generateLoginLink()}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-block w-full px-6 py-3 bg-[#0088cc] text-white rounded-xl hover:bg-[#006699] transition-colors font-medium"
+                <a
+                  href={slugMissing ? undefined : generateLoginLink()}
+                  target={slugMissing ? undefined : "_blank"}
+                  rel={slugMissing ? undefined : "noopener noreferrer"}
+                  aria-disabled={slugMissing}
+                  className={`inline-block w-full px-6 py-3 rounded-xl transition-colors font-medium ${slugMissing ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#0088cc] text-white hover:bg-[#006699]'}`}
+                  onClick={(e) => { if (slugMissing) { e.preventDefault(); toast.error(t('telegramLogin.errors.cannotResolveSlug')); } }}
                 >
-                  📱 Войти через Telegram
+                  {t('telegramLogin.loginViaTelegram')}
                 </a>
+                {slugMissing && (
+                  <p className="text-[12px] text-red-600">{t('telegramLogin.errors.cannotResolveSlug')}</p>
+                )}
                 <button
                   onClick={() => setCodeInputVisible(true)}
                   className="block w-full px-6 py-2 text-sm text-brand-secondary hover:text-brand-text transition-colors"
                 >
-                  Уже получили код? Введите его здесь
+                  {t('telegramLogin.enterCodeHere')}
                 </button>
                 <p className="text-xs text-brand-secondary">
-                  Откроется ваш Telegram с ботом {botInfo?.username ? (
+                  {t('telegramLogin.botOpenedText', { handle: botInfo?.username ? (
                     <a
                       href={`https://t.me/${botInfo.username}`}
                       target="_blank"
@@ -270,9 +294,9 @@ function TelegramLogin({ onLogin, forceModal = false }) {
                     >
                       @{botInfo.username}
                     </a>
-                  ) : (
-                    '@PsyForm_bot'
-                  )}
+                  ) : '@PsyForm_bot' })}
+                  {/* Старая разметка оставлена на случай отката:
+                  Откроется ваш Telegram с ботом ... */}
                 </p>
               </>
             ) : (
@@ -281,7 +305,7 @@ function TelegramLogin({ onLogin, forceModal = false }) {
                   type="text"
                   value={authCode}
                   onChange={(e) => setAuthCode(e.target.value)}
-                  placeholder="Введите код из Telegram"
+                  placeholder={t('telegramLogin.codePlaceholder')}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0088cc] focus:border-transparent"
                   disabled={verifying}
                 />
@@ -291,14 +315,14 @@ function TelegramLogin({ onLogin, forceModal = false }) {
                     disabled={verifying || !authCode.trim()}
                     className="flex-1 px-4 py-2 bg-[#0088cc] text-white rounded-xl hover:bg-[#006699] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {verifying ? 'Проверяем...' : 'Войти'}
+                    {verifying ? t('telegramLogin.verifying') : t('telegramLogin.login')}
                   </button>
                   <button
                     type="button"
                     onClick={() => {setCodeInputVisible(false); setAuthCode('');}}
                     className="px-4 py-2 text-brand-secondary hover:text-brand-text transition-colors"
                   >
-                    Отмена
+                    {t('telegramLogin.cancel')}
                   </button>
                 </div>
               </form>
@@ -323,12 +347,12 @@ function TelegramLogin({ onLogin, forceModal = false }) {
         <div className="p-4 mb-4 rounded-xl border border-green-200 bg-green-50">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-brand-secondary">Вы вошли как</div>
+              <div className="text-sm text-brand-secondary">{t('telegramLogin.youLoggedInAs')}</div>
               <div className="text-brand-text font-semibold text-sm">
                 {me.firstName || ''} {me.lastName || ''} {me.tgUsername ? `(@${me.tgUsername})` : ''}
               </div>
             </div>
-            <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">Выйти</button>
+            <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">{t('telegramLogin.logout')}</button>
           </div>
         </div>
       )}

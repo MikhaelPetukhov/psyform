@@ -17,24 +17,36 @@ module.exports = async function practitionerScope(req, res, next) {
 
     // 0a) На клиентских Telegram-эндпоинтах отдаём приоритет клиентскому токену,
     // чтобы не конфликтовать с админской сессией, если обе открыты в одном браузере.
+    // ИСКЛЮЧЕНИЕ: для GET /api/auth/tg/me, если явно переданы заголовки арендатора,
+    // разрешаем обычное разрешение по заголовкам, чтобы при открытии чужого кабинета
+    // эндпоинт вернул 401/403 и фронт мог сбросить cookie клиентской сессии.
     try {
       const url = req.originalUrl || req.url || '';
       if (url.startsWith('/api/auth/tg')) {
-        const jwtSecret = process.env.JWT_SECRET;
-        if (jwtSecret) {
-          let ctoken = null;
-          if (req.cookies) ctoken = req.cookies.client_sid || req.cookies.sid || null;
-          if (!ctoken) ctoken = req.header('x-auth-token');
-          if (ctoken) {
-            try {
-              const decoded = jwt.verify(ctoken, jwtSecret);
-              if (decoded && decoded.client && decoded.client.practitionerId) {
-                req.practitionerId = decoded.client.practitionerId;
-                req.user = { id: decoded.client.id, role: 'client', practitionerId: decoded.client.practitionerId };
-                logger.debug(`[scope] client token bound to practitionerId=${req.practitionerId} for ${req.method} ${req.originalUrl}`);
-                return next();
-              }
-            } catch (_) { /* ignore invalid client token */ }
+        // Проверим исключение для /api/auth/tg/me с явными заголовками арендатора
+        const isMeEndpoint = url.startsWith('/api/auth/tg/me');
+        const hdrId = req.header('x-practitioner-id');
+        const hdrSlug = req.header('x-practitioner-slug');
+        const hdrPublic = req.header('x-practitioner-public-slug');
+        const hasExplicitTenantHeaders = !!(hdrId || hdrSlug || hdrPublic);
+
+        if (!(isMeEndpoint && hasExplicitTenantHeaders)) {
+          const jwtSecret = process.env.JWT_SECRET;
+          if (jwtSecret) {
+            let ctoken = null;
+            if (req.cookies) ctoken = req.cookies.client_sid || req.cookies.sid || null;
+            if (!ctoken) ctoken = req.header('x-auth-token');
+            if (ctoken) {
+              try {
+                const decoded = jwt.verify(ctoken, jwtSecret);
+                if (decoded && decoded.client && decoded.client.practitionerId) {
+                  req.practitionerId = decoded.client.practitionerId;
+                  req.user = { id: decoded.client.id, role: 'client', practitionerId: decoded.client.practitionerId };
+                  logger.debug(`[scope] client token bound to practitionerId=${req.practitionerId} for ${req.method} ${req.originalUrl}`);
+                  return next();
+                }
+              } catch (_) { /* ignore invalid client token */ }
+            }
           }
         }
       }

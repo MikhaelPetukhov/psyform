@@ -7,7 +7,7 @@ jest.mock('../../api', () => ({
   },
 }));
 
-const { buildGoogleCalendarUrl } = require('../CalendarTab');
+import { buildGoogleCalendarUrl } from '../../utils/calendar';
 
 describe('buildGoogleCalendarUrl', () => {
   const booking = {

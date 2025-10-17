@@ -18,6 +18,7 @@ const practitionerRoutes = require('./routes/practitioners');
 const slotsRoutes = require('./routes/slots');
 const telegramRoutes = require('./routes/telegram');
 const whatsappRoutes = require('./routes/whatsapp');
+const callsRoutes = require('./routes/calls');
 
 const app = express();
 
@@ -25,6 +26,15 @@ const app = express();
 // Работая за nginx/ngrok, включаем trust proxy, чтобы корректно обрабатывался X-Forwarded-For
 app.set('trust proxy', 1);
 app.use(helmet());
+// Explicitly enforce no-referrer to avoid leaking JWT in query via Referer
+try { app.use(helmet.referrerPolicy({ policy: 'no-referrer' })); } catch (_) {}
+// Optionally set Permissions-Policy via env (do not lock down camera/mic by default)
+if (process.env.PERMISSIONS_POLICY && String(process.env.PERMISSIONS_POLICY).trim()) {
+  app.use((req, res, next) => {
+    res.setHeader('Permissions-Policy', String(process.env.PERMISSIONS_POLICY).trim());
+    next();
+  });
+}
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   credentials: true,
@@ -101,6 +111,7 @@ app.use('/api/practitioners', practitionerRoutes);
 app.use('/api/slots', slotsRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/calls', callsRoutes);
 
 
 module.exports = app;

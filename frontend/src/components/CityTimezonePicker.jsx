@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FiSearch } from 'react-icons/fi';
+import { useI18n } from '../locale/i18n';
 
 // Top 5 popular cities in Russia
 const TOP_POPULAR_CITIES = [
@@ -22,6 +23,7 @@ function formatOffset(timezone) {
 }
 
 export default function CityTimezonePicker({ onSelect }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,7 @@ export default function CityTimezonePicker({ onSelect }) {
     const t = setTimeout(async () => {
       try {
         setLoading(true);
-        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=20&language=ru&format=json`;
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=50&language=ru&format=json`;
         const res = await fetch(url);
         const data = await res.json();
         if (cancelled) return;
@@ -55,33 +57,34 @@ export default function CityTimezonePicker({ onSelect }) {
   }, [query]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="city-timezone-picker">
       <div className="bg-white rounded-2xl shadow border border-gray-200/60">
         <div className="p-4 border-b border-gray-100">
-          <div className="text-sm font-medium text-gray-800">Выберите город</div>
-          <p className="text-xs text-gray-500 mt-1">Сначала найдите ваш город через поиск, либо выберите один из популярных городов России</p>
+          <div className="text-sm font-medium text-gray-800">{t('cityPicker.title')}</div>
+          <p className="text-xs text-gray-500 mt-1">{t('cityPicker.subtitle')}</p>
         </div>
         <div className="p-4">
           {/* Поиск — сверху, с мягким акцентом и автофокусом */}
           <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Поиск города</label>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">{t('cityPicker.searchLabel')}</label>
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
+                id="city-timezone-search"
                 autoFocus
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Начните вводить город (например, Казань)"
+                placeholder={t('cityPicker.searchPlaceholder')}
                 className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-300/70 shadow-sm ring-1 ring-brand-accent/10 focus:ring-2 focus:ring-brand-accent/30 focus:border-brand-accent/60 text-sm"
               />
             </div>
             <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-gray-200/70">
               {loading ? (
-                <div className="p-3 text-sm text-gray-500">Ищем…</div>
+                <div className="p-3 text-sm text-gray-500">{t('cityPicker.searching')}</div>
               ) : (query.trim().length < minQueryLen) ? (
-                <div className="p-3 text-sm text-gray-500">Начните вводить название города (минимум {minQueryLen} символа)</div>
+                <div className="p-3 text-sm text-gray-500">{t('cityPicker.minHint', { n: minQueryLen })}</div>
               ) : results.length === 0 ? (
-                <div className="p-3 text-sm text-gray-500">Ничего не найдено</div>
+                <div className="p-3 text-sm text-gray-500">{t('cityPicker.notFound')}</div>
               ) : (
                 <ul>
                   {results.map((r, i) => (
@@ -106,7 +109,7 @@ export default function CityTimezonePicker({ onSelect }) {
 
           {/* Популярные в России — ниже */}
           <div className="mt-5">
-            <div className="text-xs font-medium text-gray-700 mb-2">Популярные города (Россия)</div>
+            <div className="text-xs font-medium text-gray-700 mb-2">{t('cityPicker.popularTitle')}</div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {TOP_POPULAR_CITIES.map((c, idx) => (
                 <button

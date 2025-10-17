@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../locale/i18n';
 
 // Popular timezones for psychologist selection matching the backend
 const TIMEZONE_OPTIONS = [
@@ -28,13 +29,15 @@ const TimezoneSelector = ({
   onChange, 
   required = false,
   className = '',
-  label = 'Ваш часовой пояс',
+  label,
   error = null
 }) => {
+  const { t } = useI18n();
+  const computedLabel = label || t('timezoneSelector.label');
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       <label className="text-sm font-medium text-brand-text">
-        {label}
+        {computedLabel}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       <select
@@ -50,7 +53,7 @@ const TimezoneSelector = ({
           }
         `}
       >
-        <option value="">Выберите часовой пояс</option>
+        <option value="">{t('timezoneSelector.placeholder')}</option>
         {TIMEZONE_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -61,8 +64,7 @@ const TimezoneSelector = ({
         <span className="text-xs text-red-600">{error}</span>
       )}
       <p className="text-xs text-gray-500">
-        Выберите город или регион, где вы работаете. 
-        Это время будет использоваться для отображения расписания в админке.
+        {t('timezoneSelector.hint')}
       </p>
     </div>
   );

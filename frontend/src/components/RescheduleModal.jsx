@@ -1,15 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { ru } from 'date-fns/locale';
 import { format, isSameDay, startOfDay, parse } from 'date-fns';
 import api from '../api';
 import { toast } from 'react-hot-toast';
+import { useI18n } from '../locale/i18n';
 
-const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
+const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled, practitionerTimezone = 'Europe/Moscow' }) => {
+  const { t } = useI18n();
   const [slots, setSlots] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(undefined);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const fmt = useMemo(() => new Intl.DateTimeFormat('ru-RU', { timeZone: practitionerTimezone, hour: '2-digit', minute: '2-digit' }), [practitionerTimezone]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -20,7 +23,7 @@ const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
         const { data } = await api.get('/slots');
         if (!cancelled) setSlots(data || {});
       } catch (e) {
-        toast.error('Не удалось загрузить слоты');
+        toast.error(t('rescheduleModal.toasts.loadSlotsError'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -53,17 +56,17 @@ const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
 
   const handleSubmit = async () => {
     if (!selectedSlot) {
-      toast.error('Выберите новое время');
+      toast.error(t('rescheduleModal.errors.selectTime'));
       return;
     }
-    const id = toast.loading('Переносим запись...');
+    const id = toast.loading(t('rescheduleModal.toasts.loading'));
     try {
       const { data } = await api.patch(`/bookings/${booking.id}/reschedule`, { slotId: selectedSlot.id });
-      toast.success('Запись перенесена', { id });
+      toast.success(t('rescheduleModal.toasts.success'), { id });
       if (onRescheduled) onRescheduled(data);
       onClose();
     } catch (e) {
-      toast.error(e?.response?.data?.msg || 'Не удалось перенести запись', { id });
+      toast.error(e?.response?.data?.msg || t('rescheduleModal.toasts.error'), { id });
     }
   };
 
@@ -95,7 +98,7 @@ const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
         <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-700">✕</button>
         <div className="grid grid-cols-1 md:grid-cols-2">
           <div className="p-6 border-r border-gray-200/60">
-            <h3 className="text-lg font-semibold text-brand-text mb-2">Выберите новую дату</h3>
+            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('rescheduleModal.titleLeft')}</h3>
             <DayPicker
               mode="single"
               selected={selectedDate}
@@ -107,9 +110,9 @@ const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
             />
           </div>
           <div className="p-6">
-            <h3 className="text-lg font-semibold text-brand-text mb-2">Доступное время</h3>
+            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('rescheduleModal.titleRight')}</h3>
             {!selectedDate ? (
-              <p className="text-sm text-brand-secondary">Сначала выберите дату</p>
+              <p className="text-sm text-brand-secondary">{t('rescheduleModal.pickDateFirst')}</p>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {getTimeSlotsForDate(selectedDate).map((slot) => (
@@ -123,18 +126,18 @@ const RescheduleModal = ({ isOpen, booking, onClose, onRescheduled }) => {
                         : 'bg-white text-brand-text border-gray-300/80 hover:border-brand-accent hover:text-brand-accent'
                     }`}
                   >
-                    {format(new Date(slot.slotTime), 'HH:mm')}
+                    {fmt.format(new Date(slot.slotTime))}
                   </button>
                 ))}
                 {getTimeSlotsForDate(selectedDate).length === 0 && (
-                  <div className="col-span-full text-sm text-brand-secondary">Нет свободных слотов</div>
+                  <div className="col-span-full text-sm text-brand-secondary">{t('rescheduleModal.noSlots')}</div>
                 )}
               </div>
             )}
 
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={onClose} className="px-4 py-2 rounded-lg border">Отмена</button>
-              <button onClick={handleSubmit} disabled={!selectedSlot || loading} className="px-4 py-2 rounded-lg bg-brand-accent text-white disabled:opacity-50">Перенести</button>
+              <button onClick={onClose} className="px-4 py-2 rounded-lg border">{t('rescheduleModal.cancel')}</button>
+              <button onClick={handleSubmit} disabled={!selectedSlot || loading} className="px-4 py-2 rounded-lg bg-brand-accent text-white disabled:opacity-50">{t('rescheduleModal.submit')}</button>
             </div>
           </div>
         </div>

@@ -25,6 +25,9 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+jitsi/docker-jitsi-meet/.env
+jitsi/docker-jitsi-meet/secrets/
+secrets/
 
 # But do not ignore example files.
 !**/.env.example

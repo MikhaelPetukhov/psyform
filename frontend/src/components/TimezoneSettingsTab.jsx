@@ -3,8 +3,10 @@ import { toast } from 'react-hot-toast';
 import api from '../api';
 import { FiMapPin, FiSave, FiLoader } from 'react-icons/fi';
 import { TOP_CITIES, OTHER_CITIES, getTimezoneLabel, detectClosestRussianCity } from '../utils/russianCities';
+import { useI18n } from '../locale/i18n';
 
 const TimezoneSettingsTab = () => {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [practitioner, setPractitioner] = useState(null);
@@ -28,7 +30,7 @@ const TimezoneSettingsTab = () => {
         const detected = detectClosestRussianCity();
         setDetectedCity(detected);
       } catch (e) {
-        toast.error('Не удалось загрузить профиль');
+        toast.error(t('profile.errors.load'));
         console.error(e);
       } finally {
         setLoading(false);
@@ -40,7 +42,7 @@ const TimezoneSettingsTab = () => {
 
   const handleSave = async () => {
     if (!selectedCity) {
-      toast.error('Выберите город');
+      toast.error(t('cityPicker.title'));
       return;
     }
 
@@ -51,7 +53,7 @@ const TimezoneSettingsTab = () => {
       });
       
       setPractitioner(prev => ({ ...prev, timezone: selectedCity.timezone }));
-      toast.success('Часовой пояс обновлён');
+      toast.success(t('profile.saved'));
       
       // Обновляем localStorage если нужно
       localStorage.setItem('practitionerTimezone', selectedCity.timezone);
@@ -59,7 +61,7 @@ const TimezoneSettingsTab = () => {
       // Перезагружаем страницу для применения изменений
       setTimeout(() => window.location.reload(), 1000);
     } catch (e) {
-      toast.error(e.response?.data?.msg || 'Не удалось сохранить настройки');
+      toast.error(e.response?.data?.msg || t('errors.generic'));
     } finally {
       setSaving(false);
     }
@@ -73,7 +75,7 @@ const TimezoneSettingsTab = () => {
     return (
       <div className="text-center py-16">
         <FiLoader className="mx-auto h-12 w-12 text-brand-accent animate-spin" />
-        <h4 className="mt-4 text-lg font-medium text-brand-text">Загрузка настроек...</h4>
+        <h4 className="mt-4 text-lg font-medium text-brand-text">{t('schedule.loading')}</h4>
       </div>
     );
   }
@@ -83,10 +85,10 @@ const TimezoneSettingsTab = () => {
       <div>
         <h3 className="text-xl font-semibold text-brand-text flex items-center">
           <FiMapPin className="mr-3 text-brand-accent"/>
-          Часовой пояс
+          {t('timezoneSelector.label')}
         </h3>
         <p className="text-sm text-gray-600 mt-2">
-          Выберите ваш город для корректного отображения времени в календаре и уведомлениях.
+          {t('timezoneSelector.hint')}
         </p>
       </div>
 
@@ -95,14 +97,14 @@ const TimezoneSettingsTab = () => {
           <div className="flex items-start">
             <FiMapPin className="text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
             <div>
-              <h4 className="text-sm font-medium text-blue-800">Автоопределение</h4>
+              <h4 className="text-sm font-medium text-blue-800">{t('timezoneSelector.autoDetectTitle')}</h4>
               <p className="text-sm text-blue-700 mt-1">
-                Мы определили ваш часовой пояс как <strong>{detectedCity.name}</strong>.
+                {t('timezoneSelector.autoDetected', { name: detectedCity.name })}
                 <button
                   onClick={() => handleCityChange(detectedCity)}
                   className="ml-2 text-blue-600 hover:text-blue-800 underline"
                 >
-                  Использовать
+                  {t('timezoneSelector.use')}
                 </button>
               </p>
             </div>
@@ -111,7 +113,7 @@ const TimezoneSettingsTab = () => {
       )}
 
       <div>
-        <h4 className="text-lg font-medium text-brand-text mb-4">Крупные города</h4>
+        <h4 className="text-lg font-medium text-brand-text mb-4">{t('clientTz.topCities')}</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {TOP_CITIES.map((city) => (
             <button
@@ -131,7 +133,7 @@ const TimezoneSettingsTab = () => {
       </div>
 
       <div>
-        <h4 className="text-lg font-medium text-brand-text mb-4">Другие города</h4>
+        <h4 className="text-lg font-medium text-brand-text mb-4">{t('clientTz.otherCities')}</h4>
         <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
           {OTHER_CITIES.map((city) => (
             <button
@@ -157,13 +159,13 @@ const TimezoneSettingsTab = () => {
 
       {selectedCity && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h4 className="font-medium text-gray-800">Выбранный часовой пояс</h4>
+          <h4 className="font-medium text-gray-800">{t('profile.chosenTimezone')}</h4>
           <div className="mt-2">
             <div className="text-lg font-semibold text-brand-accent">{selectedCity.name}</div>
             <div className="text-sm text-gray-600">{selectedCity.region}</div>
             <div className="text-sm text-gray-600">UTC{selectedCity.utcOffset} ({selectedCity.timezone})</div>
             <div className="text-sm text-gray-600 mt-1">
-              Текущее время: <span className="font-mono">{
+              {t('profile.currentTime')} <span className="font-mono">{
                 new Date().toLocaleTimeString('ru-RU', { 
                   timeZone: selectedCity.timezone,
                   hour12: false 
@@ -181,7 +183,7 @@ const TimezoneSettingsTab = () => {
           className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white bg-brand-accent hover:bg-brand-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-accent disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {saving ? <FiLoader className="animate-spin -ml-1 mr-3 h-5 w-5" /> : <FiSave className="-ml-1 mr-3 h-5 w-5"/>}
-          {saving ? 'Сохранение...' : 'Сохранить изменения'}
+          {saving ? t('schedule.saving') : t('schedule.save')}
         </button>
       </div>
     </div>

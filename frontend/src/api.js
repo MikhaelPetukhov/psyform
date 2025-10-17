@@ -1,4 +1,5 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const api = axios.create({
   baseURL: '/api',
@@ -45,3 +46,22 @@ api.interceptors.request.use(
 );
 
 export default api;
+
+// Global response interceptor for user-friendly error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    try {
+      const status = error?.response?.status;
+      const suppress = error?.config && (error.config._suppressGlobalError || error.config.headers?.['X-Suppress-Error']);
+      if (!suppress) {
+        if (status >= 500) {
+          toast.error('Произошла ошибка на сервере. Попробуйте ещё раз.');
+        } else if (!error.response) {
+          toast.error('Не удалось подключиться к серверу. Проверьте соединение и попробуйте ещё раз.');
+        }
+      }
+    } catch (_) { /* ignore */ }
+    return Promise.reject(error);
+  }
+);

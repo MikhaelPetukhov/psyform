@@ -15,7 +15,7 @@ const Practitioner = sequelize.define('Practitioner', {
   // Separate public slug for booking page like /p/:publicSlug
   publicSlug: {
     type: DataTypes.STRING,
-    allowNull: true,
+    allowNull: false,
     unique: true,
   },
   displayName: {
@@ -84,6 +84,17 @@ const Practitioner = sequelize.define('Practitioner', {
 }, {
   tableName: 'Practitioners',
   timestamps: true,
+  hooks: {
+    // Auto-fill publicSlug if not provided explicitly (helps tests that create Practitioner without it)
+    beforeValidate: async (instance) => {
+      try {
+        if (!instance.publicSlug || !String(instance.publicSlug).trim()) {
+          const base = instance.slug ? String(instance.slug).trim() : `auto-${Date.now().toString(36)}`;
+          instance.publicSlug = `form-${base}`;
+        }
+      } catch (_) { /* ignore */ }
+    },
+  },
 });
 
 // Define associations

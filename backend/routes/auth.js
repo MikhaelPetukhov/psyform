@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { User, Client, TgAuthCode, Practitioner } = require('../models');
+const { Op } = require('sequelize');
 const clientAuth = require('../middleware/clientAuthMiddleware');
 const authMiddleware = require('../middleware/authMiddleware');
 const adminOnly = require('../middleware/adminOnly');
@@ -64,6 +65,15 @@ async function ensureUniquePublicSlug(base) {
   }
   const fallback = `${b}-${Date.now().toString(36)}`;
   return fallback;
+}
+
+function resolveCookieSecurity() {
+  const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
+    || process.env.NODE_ENV === 'production';
+  return {
+    secure,
+    sameSite: secure ? 'none' : 'lax',
+  };
 }
 
 // POST /api/auth/login
@@ -132,11 +142,11 @@ router.post(
                     if (err) throw err;
                     
                     // Set HttpOnly cookie instead of returning token in response
-                    const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+                    const { secure, sameSite } = resolveCookieSecurity();
                     res.cookie('admin_sid', token, {
                         httpOnly: true,
                         secure,
-                        sameSite: 'none',
+                        sameSite,
                         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
                         path: '/',
                     });
@@ -186,12 +196,11 @@ router.get('/admin/me', authMiddleware, adminOnly, async (req, res) => {
 
 router.post('/admin/logout', (req, res) => {
   try {
-    const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
-      || process.env.NODE_ENV === 'production';
+    const { secure, sameSite } = resolveCookieSecurity();
     const opts = {
       httpOnly: true,
       secure,
-      sameSite: 'none',
+      sameSite,
       maxAge: 0,
       path: '/',
     };
@@ -329,11 +338,11 @@ router.post('/telegram/verify-code', async (req, res) => {
     if (!jwtSecret) return res.status(500).json({ msg: 'Server configuration error' });
     const token = jwt.sign(payload, jwtSecret, { expiresIn: '30d' });
 
-    const secureClient = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+    const { secure: secureClient, sameSite } = resolveCookieSecurity();
     res.cookie('client_sid', token, {
       httpOnly: true,
       secure: secureClient,
-      sameSite: 'none',
+      sameSite,
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -480,11 +489,11 @@ router.get('/admin/magic', async (req, res) => {
     if (!jwtSecret) return res.status(500).send('Server configuration error');
     const token = jwt.sign(payload, jwtSecret, { expiresIn: '7d' });
 
-    const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
+    const { secure, sameSite } = resolveCookieSecurity();
     res.cookie('admin_sid', token, {
       httpOnly: true,
       secure,
-      sameSite: 'none',
+      sameSite,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -590,11 +599,11 @@ router.post(
       const token = jwt.sign(payload, jwtSecret, { expiresIn: '24h' });
 
       // Set HttpOnly cookie instead of returning token in response
-      const secure = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+      const { secure, sameSite } = resolveCookieSecurity();
       res.cookie('admin_sid', token, {
         httpOnly: true,
         secure,
-        sameSite: 'none',
+        sameSite,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
       });
@@ -726,12 +735,11 @@ router.post(
       if (!jwtSecret) return res.status(500).json({ msg: 'Server configuration error' });
       const token = jwt.sign(payload, jwtSecret, { expiresIn: '30d' });
 
-      const secureClient = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
-        || process.env.NODE_ENV === 'production';
+      const { secure: secureClient, sameSite } = resolveCookieSecurity();
       res.cookie('client_sid', token, {
         httpOnly: true,
         secure: secureClient,
-        sameSite: 'none',
+        sameSite,
         maxAge: 30 * 24 * 60 * 60 * 1000,
         path: '/',
       });
@@ -768,12 +776,11 @@ router.get('/tg/me', clientAuth, async (req, res) => {
 // Telegram: logout by expiring HttpOnly cookie
 router.post('/tg/logout', async (req, res) => {
   try {
-    const secureClient = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true'
-      || process.env.NODE_ENV === 'production';
+    const { secure: secureClient, sameSite } = resolveCookieSecurity();
     const cookieOpts = {
       httpOnly: true,
       secure: secureClient,
-      sameSite: 'none',
+      sameSite,
       maxAge: 0,
       path: '/',
     };
@@ -786,24 +793,21 @@ router.post('/tg/logout', async (req, res) => {
   }
 });
 
-// Magic-link вход: принимает токен ?t=<token>, опционально ?p=<slug>&r=<base64url>
+// Magic-link вход: принимает токен ?t=<token> и обязательный ?p=<publicSlug|slug>&r=<base64url>
 router.get('/magic', async (req, res) => {
   try {
     const raw = String(req.query.t || '').trim();
     if (!raw) return res.status(400).send('Missing token');
 
-    // Определяем practitionerId: приоритет - ?p=<slug>, затем req.practitionerId, затем из записи токена
-    let practitionerId = null;
-    const pSlug = (req.query.p || '').toString().trim();
-    if (pSlug) {
-      try {
-        const p = await Practitioner.findOne({ where: { slug: pSlug } });
-        practitionerId = p ? p.id : null;
-      } catch (_) { /* ignore */ }
-    }
-    if (!practitionerId && req.practitionerId) {
-      practitionerId = req.practitionerId;
-    }
+    // Требуем и валидируем p: публичный или приватный slug существующего психолога
+    const pParam = (req.query.p || '').toString().trim();
+    if (!pParam) return res.status(400).send('Missing p');
+    let practitioner = null;
+    try {
+      practitioner = await Practitioner.findOne({ where: { [Op.or]: [{ publicSlug: pParam }, { slug: pParam }] } });
+    } catch (_) { /* ignore */ }
+    if (!practitioner) return res.status(404).send('Unknown practitioner');
+    const practitionerId = practitioner.id;
 
     // Хелперы: проверка валидной cookie sid и безопасный редирект
     const hasValidSid = () => {
@@ -816,31 +820,13 @@ router.get('/magic', async (req, res) => {
         return true;
       } catch (_) { return false; }
     };
-    // Если r не передан, пробуем определить публичную форму текущего арендатора
-    const resolveFormPath = async () => {
-      try {
-        if (practitionerId) {
-          const p = await Practitioner.findByPk(practitionerId);
-          if (p && (p.publicSlug || p.slug)) return `/p/${encodeURIComponent(p.publicSlug || p.slug)}`;
-        }
-        if (pSlug) {
-          const p = await Practitioner.findOne({ where: { slug: pSlug } });
-          if (p && (p.publicSlug || p.slug)) return `/p/${encodeURIComponent(p.publicSlug || p.slug)}`;
-        }
-      } catch (_) { /* ignore */ }
-      return '/';
-    };
-    const safeRedirect = async () => {
-      const fallbackPath = await resolveFormPath();
+    const safeRedirect = () => {
+      const fallbackPath = `/p/${encodeURIComponent(practitioner.publicSlug || practitioner.slug)}`;
       const r = (req.query.r || '').toString();
       if (r) {
         try {
           const decoded = Buffer.from(r, 'base64url').toString('utf8');
           if (decoded.startsWith('/')) {
-            // Если r указывает на корень, но у нас есть форма арендатора — ведём на форму
-            if (decoded === '/' && fallbackPath && fallbackPath !== '/') {
-              return res.redirect(302, fallbackPath);
-            }
             return res.redirect(302, decoded);
           }
         } catch (_) { /* ignore */ }
@@ -852,26 +838,23 @@ router.get('/magic', async (req, res) => {
     const now = new Date();
     const record = await TgAuthCode.findOne({ where: { codeHash } });
     if (!record) {
-      if (hasValidSid()) { return await safeRedirect(); }
+      if (hasValidSid()) { return safeRedirect(); }
       return res.status(401).send('Invalid token');
     }
     if (record.usedAt) {
-      if (hasValidSid()) { return await safeRedirect(); }
+      if (hasValidSid()) { return safeRedirect(); }
       return res.status(401).send('Token already used');
     }
     if (record.expiresAt && record.expiresAt < now) {
-      if (hasValidSid()) { return await safeRedirect(); }
+      if (hasValidSid()) { return safeRedirect(); }
       return res.status(401).send('Token expired');
     }
     if (record.scope !== 'client') {
-      if (hasValidSid()) { return await safeRedirect(); }
+      if (hasValidSid()) { return safeRedirect(); }
       return res.status(401).send('Wrong token scope');
     }
     
-    // Если tenant не определён из параметров/мидлвари, берем из записи токена
-    if (!practitionerId && record.practitionerId) practitionerId = record.practitionerId;
-    
-    // Скоуп: привязываем к арендатору при первом использовании
+    // Скоуп: сличаем с переданным p; если запись привязана к другому арендатору — 403
     if (record.practitionerId && practitionerId && String(record.practitionerId) !== String(practitionerId)) {
       return res.status(403).send('Wrong tenant for token');
     }
@@ -958,11 +941,12 @@ router.get('/magic', async (req, res) => {
     const token = jwt.sign(payload, jwtSecret, { expiresIn: '30d' });
 
     // Set HttpOnly cookies for client token (compat: 'sid' and 'client_sid')
-    const secureCookie = String(process.env.COOKIE_SECURE || '').toLowerCase() === 'true' || process.env.NODE_ENV === 'production';
+    // Prefer SameSite=None; Secure in production to survive Telegram in-app browser
+    const { secure, sameSite } = resolveCookieSecurity();
     const cookieOpts = {
       httpOnly: true,
-      secure: secureCookie,
-      sameSite: 'lax',
+      secure,
+      sameSite,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     };
@@ -970,7 +954,7 @@ router.get('/magic', async (req, res) => {
     res.cookie('client_sid', token, cookieOpts);
 
     // Безопасный редирект
-    return await safeRedirect();
+    return safeRedirect();
   } catch (e) {
     return res.status(500).send('Ошибка сервера');
   }

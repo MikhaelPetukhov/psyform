@@ -8,8 +8,10 @@ import 'cleave.js/dist/addons/cleave-phone.i18n';
 import { TimeRangeDisplay } from '../TimezoneDisplay';
 import { normalizePhoneForSubmit } from '../../utils/phoneFormat';
 import { createBooking } from '../../api/calendar';
+import { useI18n } from '../../locale/i18n';
 
 const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [telegram, setTelegram] = useState('');
@@ -34,7 +36,7 @@ const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => 
       onClose();
     } catch (error) {
       console.error('Failed to create booking', error);
-      const message = error?.response?.data?.msg || error?.response?.data?.message || 'Ошибка при создании записи';
+      const message = error?.response?.data?.msg || error?.response?.data?.message || t('addBookingModal.errors.createFailed');
       toast.error(message);
     }
   };
@@ -42,9 +44,9 @@ const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg w-80 shadow-lg flex flex-col gap-3">
-        <h4 className="text-lg font-semibold mb-1">Записать клиента</h4>
+        <h4 className="text-lg font-semibold mb-1">{t('addBookingModal.title')}</h4>
         <div className="text-sm mb-2">
-          <div>Дата: {format(new Date(slot.slotTime), 'dd.MM.yyyy')}</div>
+          <div>{t('addBookingModal.date')}: {format(new Date(slot.slotTime), 'dd.MM.yyyy')}</div>
           <TimeRangeDisplay
             startTime={slot.slotTime}
             endTime={slot.endTime}
@@ -55,7 +57,7 @@ const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => 
         <input
           type="text"
           required
-          placeholder="Имя"
+          placeholder={t('addBookingModal.placeholders.name')}
           value={name}
           onChange={(event) => setName(event.target.value)}
           className="border rounded px-2 py-1 text-sm"
@@ -71,18 +73,18 @@ const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => 
             setPhone(value);
           }}
           className="border rounded px-2 py-1 text-sm"
-          placeholder="+7 977 288-14-99"
+          placeholder={t('addBookingModal.placeholders.phone')}
           required
         />
         <input
           type="text"
-          placeholder="Telegram"
+          placeholder={t('addBookingModal.placeholders.telegram')}
           value={telegram}
           onChange={(event) => setTelegram(event.target.value)}
           className="border rounded px-2 py-1 text-sm"
         />
         <textarea
-          placeholder="Комментарий (необязательно)"
+          placeholder={t('addBookingModal.placeholders.comment')}
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           rows="3"
@@ -94,10 +96,10 @@ const AddBookingModal = ({ slot, onClose, onCreated, practitionerTimezone }) => 
             onClick={onClose}
             className="px-3 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200"
           >
-            Отмена
+            {t('addBookingModal.cancel')}
           </button>
           <button type="submit" className="px-3 py-1 rounded text-sm bg-brand-accent text-white">
-            Записать
+            {t('addBookingModal.submit')}
           </button>
         </div>
       </form>

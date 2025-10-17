@@ -5,6 +5,7 @@ const { startTelegramBot } = require('./services/telegramBot');
 const { startReminderScheduler } = require('./services/reminderScheduler');
 const { startCleanupScheduler } = require('./services/cleanupScheduler');
 const { startJobWorkers } = require('./services/jobQueue');
+const { scheduleExpirySweep } = require('./services/callSessionService');
 
 (async () => {
   try {
@@ -46,6 +47,14 @@ const { startJobWorkers } = require('./services/jobQueue');
       logger.info('[WORKER] Job workers started');
     } else {
       logger.info('[WORKER] Job workers disabled');
+    }
+
+    // Periodic sweep for expired call sessions (L3)
+    try {
+      scheduleExpirySweep();
+      logger.info('[WORKER] Calls expiry sweep scheduled');
+    } catch (e) {
+      logger.warn(`[WORKER] Calls expiry sweep failed to start: ${e.message}`);
     }
 
     // Keep process alive

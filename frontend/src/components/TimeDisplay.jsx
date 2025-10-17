@@ -1,10 +1,14 @@
+// DEPRECATED: Этот компонент больше не используется в UI.
+// Используйте компоненты из `components/TimezoneDisplay.jsx` (Intl) вместо Luxon-обёрток.
 import React, { useState } from 'react';
 import { formatTimeRangeDisplay, isUserInMoscow, getTimezoneOffset, USER_TIMEZONE } from '../utils/timezone';
+import { useI18n } from '../locale/i18n';
 
 /**
  * Component for displaying time with timezone support
  */
 const TimeDisplay = ({ timeRange, showToggle = false, compact = false }) => {
+  const { t } = useI18n();
   const [showUserTimezone, setShowUserTimezone] = useState(false);
   
   if (!timeRange) return null;
@@ -16,7 +20,7 @@ const TimeDisplay = ({ timeRange, showToggle = false, compact = false }) => {
     return (
       <span className="time-display">
         <span className="time-main">{display.moscow.time}</span>
-        <span className="time-zone"> МСК</span>
+        <span className="time-zone"> {t('timeDisplay.msk')}</span>
         {showUserTimezone && display.user && (
           <>
             <span className="time-separator"> • </span>
@@ -31,7 +35,7 @@ const TimeDisplay = ({ timeRange, showToggle = false, compact = false }) => {
     <div className="time-display">
       <div className="time-primary">
         <span className="time-main">{display.moscow.time}</span>
-        <span className="time-zone-info"> МСК ({getTimezoneOffset('Europe/Moscow')})</span>
+        <span className="time-zone-info"> {t('timeDisplay.msk')} ({getTimezoneOffset('Europe/Moscow')})</span>
       </div>
       
       {showUserTimezone && display.user && (
@@ -50,7 +54,7 @@ const TimeDisplay = ({ timeRange, showToggle = false, compact = false }) => {
               onChange={(e) => setShowUserTimezone(e.target.checked)}
               className="toggle-checkbox"
             />
-            <span className="toggle-text">Показать в моём часовом поясе</span>
+            <span className="toggle-text">{t('timeDisplay.showInMyTz')}</span>
           </label>
         </div>
       )}

@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { toast } from 'react-hot-toast';
+import { useI18n } from '../locale/i18n';
 
 const AdminLanding = () => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [bot, setBot] = useState({ username: null, link: null });
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -58,10 +60,10 @@ const AdminLanding = () => {
       if (link) {
         window.open(link, '_blank', 'noopener');
       } else {
-        toast.error('Не удалось получить ссылку на бота');
+        toast.error(t('adminLanding.errors.linkFailed'));
       }
     } catch (e) {
-      toast.error('Сервис Telegram временно недоступен');
+      toast.error(t('adminLanding.errors.serviceUnavailable'));
     } finally {
       setStarting(false);
     }
@@ -72,7 +74,7 @@ const AdminLanding = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-brand-background flex items-center justify-center p-4">
-        <div className="text-brand-secondary">Загрузка…</div>
+        <div className="text-brand-secondary">{t('bookings.loading')}</div>
       </div>
     );
   }
@@ -81,16 +83,16 @@ const AdminLanding = () => {
     <div className="min-h-screen bg-brand-background flex items-center justify-center p-4">
       <div className="w-full max-w-xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-200/60 p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-brand-text mb-2">Кабинет специалиста</h1>
-          <p className="text-brand-secondary">Вход через Telegram</p>
+          <h1 className="text-3xl font-bold text-brand-text mb-2">{t('adminLanding.title')}</h1>
+          <p className="text-brand-secondary">{t('adminLanding.subtitle')}</p>
         </div>
 
         <div className="space-y-6">
           <div className="text-sm text-brand-secondary">
             <ol className="list-decimal list-inside space-y-2 ml-4">
-              <li>Нажмите кнопку ниже — откроется ваш Telegram с ботом {bot?.username ? <a href={`https://t.me/${bot.username}`} target="_blank" rel="noopener noreferrer" className="underline">@{bot.username}</a> : 'ботом'}.</li>
-              <li>Поделитесь своим номером телефона.</li>
-              <li>Нажмите кнопку «Войти в кабинет» в боте — вы вернётесь на сайт уже авторизованным.</li>
+              <li>{t('adminLanding.steps.one', { handle: bot?.username ? `@${bot.username}` : t('adminLanding.subtitle') })}</li>
+              <li>{t('adminLanding.steps.two')}</li>
+              <li>{t('adminLanding.steps.three')}</li>
             </ol>
           </div>
 
@@ -99,7 +101,7 @@ const AdminLanding = () => {
             disabled={starting}
             className="w-full py-3 px-5 rounded-xl font-bold text-base transition-all duration-300 transform disabled:cursor-not-allowed bg-[#0088cc] text-white hover:bg-[#006699] hover:shadow-lg hover:scale-[1.02]"
           >
-            {starting ? 'Открываем Telegram…' : '📲 Войти как администратор через Telegram'}
+            {starting ? t('adminLanding.buttons.opening') : t('adminLanding.buttons.start')}
           </button>
 
           {/* Ручной ввод кода и ссылка на /psychologist/login удалены по требованию: оставляем только Telegram */}

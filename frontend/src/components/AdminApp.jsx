@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import api from '../api';
+import { useI18n } from '../locale/i18n';
 
 import BookingsTab from './BookingsTab';
 import CalendarTab from './CalendarTab';
@@ -10,18 +11,25 @@ import ProfileSettings from './ProfileSettings';
 
 const AdminApp = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('calendar');
+  const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('adminActiveTab');
+      if (['bookings','calendar','profile','schedule'].includes(saved)) return saved;
+    } catch (_) {}
+    return 'calendar';
+  });
   const [practitionerSlug, setPractitionerSlug] = useState(typeof window !== 'undefined' ? (localStorage.getItem('practitionerSlug') || '') : '');
   const [practitionerPublicSlug, setPractitionerPublicSlug] = useState(typeof window !== 'undefined' ? (localStorage.getItem('practitionerPublicSlug') || '') : '');
   const [practitionerTimezone, setPractitionerTimezone] = useState('Europe/Moscow');
+  const [showProfileBanner, setShowProfileBanner] = useState(false);
 
   useEffect(() => {
     // Initialize tab from querystring (e.g., ?tab=bookings)
     try {
       const params = new URLSearchParams(location.search || '');
       const tab = (params.get('tab') || '').toLowerCase();
-      if (['bookings','calendar','profile','autoSchedule'].includes(tab)) {
+      if (['bookings','calendar','profile','schedule'].includes(tab)) {
         setActiveTab(tab);
       }
     } catch (_) {}
@@ -33,6 +41,9 @@ const AdminApp = () => {
         const p = data?.practitioner || {};
         if (!p.displayName || !p.specialization || !p.price || !p.clientMessageTemplate || !p.timezone) {
           setActiveTab('profile');
+          setShowProfileBanner(true);
+        } else {
+          setShowProfileBanner(false);
         }
         // Set practitioner timezone
         if (p.timezone) {
@@ -50,12 +61,17 @@ const AdminApp = () => {
     })();
   }, []);
 
+  // Persist active tab between visits
+  useEffect(() => {
+    try { localStorage.setItem('adminActiveTab', activeTab); } catch (_) {}
+  }, [activeTab]);
+
   // React to query param tab changes later as well (e.g., user clicks from Calendar)
   useEffect(() => {
     try {
       const params = new URLSearchParams(location.search || '');
       const tab = (params.get('tab') || '').toLowerCase();
-      if (['bookings','calendar','profile','autoSchedule'].includes(tab) && tab !== activeTab) {
+      if (['bookings','calendar','profile','schedule'].includes(tab) && tab !== activeTab) {
         setActiveTab(tab);
       }
     } catch (_) {}
@@ -87,7 +103,7 @@ const AdminApp = () => {
       case 'schedule':
         return <ScheduleSettingsTab practitionerTimezone={practitionerTimezone} />;
       case 'profile':
-        return <ProfileSettings practitionerTimezone={practitionerTimezone} onTimezoneUpdate={setPractitionerTimezone} />;
+        return <ProfileSettings practitionerTimezone={practitionerTimezone} onTimezoneUpdate={setPractitionerTimezone} practitionerPublicSlug={practitionerPublicSlug} />;
       default:
         return <CalendarTab practitionerTimezone={practitionerTimezone} />;
     }
@@ -100,20 +116,20 @@ const AdminApp = () => {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-brand-text">
-                Панель управления
+                {t('admin.header.title')}
               </h1>
               <p className="mt-1 text-sm text-brand-secondary">
-                Управление записями и расписанием
+                {t('admin.header.subtitle')}
               </p>
               <div className="mt-2 text-xs text-brand-secondary flex flex-col sm:flex-row sm:items-center gap-1">
                 {practitionerSlug && (
                   <span>
-                    Кабинет: <a className="underline" href={`/psychologist/${practitionerSlug}`} target="_blank" rel="noreferrer">/psychologist/{practitionerSlug}</a>
+                    {t('admin.header.cabinet')}: <a className="underline" href={`/psychologist/${practitionerSlug}`} target="_blank" rel="noreferrer">/psychologist/{practitionerSlug}</a>
                   </span>
                 )}
                 {practitionerPublicSlug && (
                   <span>
-                    Форма записи: <a className="underline" href={`/p/${practitionerPublicSlug}`} target="_blank" rel="noreferrer">/p/{practitionerPublicSlug}</a>
+                    {t('admin.header.publicForm')}: <a className="underline" href={`/p/${practitionerPublicSlug}`} target="_blank" rel="noreferrer">/p/{practitionerPublicSlug}</a>
                   </span>
                 )}
               </div>
@@ -122,13 +138,25 @@ const AdminApp = () => {
               onClick={handleLogout}
               className="px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-red-50 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
-              Выйти
+              {t('admin.header.logout')}
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {showProfileBanner && (
+          <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 flex items-start justify-between gap-3">
+            <div>
+              <div className="font-semibold">{t('admin.profileBanner.title')}</div>
+              <div className="text-sm">{t('admin.profileBanner.text')}</div>
+            </div>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700"
+            >{t('admin.profileBanner.cta')}</button>
+          </div>
+        )}
         <nav className="bg-white border-b border-gray-200 px-6 py-3">
           <div className="flex space-x-8">
             <button
@@ -139,7 +167,7 @@ const AdminApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Календарь
+              {t('admin.tabs.calendar')}
             </button>
             <button
               onClick={() => setActiveTab('bookings')}
@@ -149,7 +177,7 @@ const AdminApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Записи клиентов
+              {t('admin.tabs.bookings')}
             </button>
             <button
               onClick={() => setActiveTab('schedule')}
@@ -159,7 +187,7 @@ const AdminApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Настройки расписания
+              {t('admin.tabs.schedule')}
             </button>
             <button
               onClick={() => setActiveTab('profile')}
@@ -169,7 +197,7 @@ const AdminApp = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Профиль
+              {t('admin.tabs.profile')}
             </button>
           </div>
         </nav>

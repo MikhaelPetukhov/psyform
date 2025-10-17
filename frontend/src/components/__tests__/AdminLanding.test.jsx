@@ -1,28 +1,35 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '../../locale/i18n';
 import AdminLanding from '../../components/AdminLanding';
 
-jest.mock('../../api', () => ({
-  get: jest.fn((url) => {
-    if (url === '/auth/admin/me') {
-      // Not authorized – show landing
-      return Promise.reject({ response: { status: 401 } });
-    }
-    if (url === '/telegram/bot') {
-      return Promise.resolve({ data: { username: 'test_bot', link: 'https://t.me/test_bot' } });
-    }
-    return Promise.resolve({ data: {} });
-  }),
-  post: jest.fn(() => Promise.resolve({ data: {} })),
-}));
+jest.mock('../../api', () => {
+  const api = {
+    get: jest.fn((url) => {
+      if (url === '/auth/admin/me') {
+        // Not authorized – show landing
+        return Promise.reject({ response: { status: 401 } });
+      }
+      if (url === '/telegram/bot') {
+        return Promise.resolve({ data: { username: 'test_bot', link: 'https://t.me/test_bot' } });
+      }
+      return Promise.resolve({ data: {} });
+    }),
+    post: jest.fn(() => Promise.resolve({ data: {} })),
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  };
+  return { __esModule: true, default: api };
+});
 
 describe('AdminLanding UI', () => {
   test('shows only Telegram login button and no manual code input', async () => {
     render(
-      <MemoryRouter>
-        <AdminLanding />
-      </MemoryRouter>
+      <I18nProvider locale="ru">
+        <MemoryRouter>
+          <AdminLanding />
+        </MemoryRouter>
+      </I18nProvider>
     );
 
     await waitFor(() => {

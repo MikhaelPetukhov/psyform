@@ -127,6 +127,23 @@ const CreateSlotModal = ({
         <h4 className="text-lg font-semibold mb-1">Создать слот</h4>
         <div className="text-xs text-gray-600 mb-3">
           Время указывается в часовом поясе: <span className="font-medium">{practitionerTimezone}</span>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.setItem('adminActiveTab', 'profile');
+                localStorage.setItem('profile.openTimezone', '1');
+              } catch (_) {}
+              const slug = (() => {
+                try { return localStorage.getItem('practitionerSlug') || localStorage.getItem('practitionerPublicSlug') || ''; } catch (_) { return ''; }
+              })();
+              const path = slug ? `/psychologist/${slug}` : '/psychologist';
+              window.location.assign(path);
+            }}
+            className="ml-2 inline-flex items-center px-2 py-0.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+          >
+            Изменить
+          </button>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="col-span-2">

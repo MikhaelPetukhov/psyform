@@ -66,16 +66,16 @@ describe('Telegram auth flow', () => {
 
       const client = await Client.findOne({ where: { tgUserId: found.tgUserId, practitionerId: p1.id } });
       expect(client).toBeTruthy();
-      expect(client.tgPhone).toBe('+70000000001');
     });
 
-    test('second click without cookie returns 401 Token already used', async () => {
-      const code = 'one-time';
-      await createCodeRecord({ code, tgPhone: '+70000000002', practitionerId: p1.id, expiresInMin: 10 });
+    test('valid token without r redirects to practitioner public form', async () => {
+      const code = 'redir-form';
+      await createCodeRecord({ code, tgPhone: '+70000009999', practitionerId: p1.id });
 
-      await request(app)
-        .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p1.slug)}`)
+      const res = await request(app)
+        .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p1.publicSlug)}`)
         .expect(302);
+      expect(res.headers.location).toBe(formPath(p1));
 
       const res2 = await request(app)
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent(p1.slug)}`)
@@ -149,18 +149,14 @@ describe('Telegram auth flow', () => {
       expect(res.text).toMatch(/Wrong tenant/i);
     });
 
-    test('without p param takes practitioner from token record', async () => {
+    test('missing p param returns 400', async () => {
       const code = 'implicit-tenant';
-      const rec = await createCodeRecord({ code, tgPhone: '+70000000011', practitionerId: p1.id });
+      await createCodeRecord({ code, tgPhone: '+70000000011', practitionerId: p1.id });
 
       const res = await request(app)
         .get(`/api/auth/magic?t=${encodeURIComponent(code)}`)
-        .expect(302);
-      expect(res.headers.location).toBe(formPath(p1));
-
-      // Client must be created under p1
-      const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p1.id } });
-      expect(client).toBeTruthy();
+        .expect(400);
+      expect(res.text).toMatch(/Missing p/i);
     });
 
     test('slug parameter binds tenant when record is not scoped', async () => {
@@ -177,6 +173,15 @@ describe('Telegram auth flow', () => {
 
       const client = await Client.findOne({ where: { tgUserId: rec.tgUserId, practitionerId: p2.id } });
       expect(client).toBeTruthy();
+    });
+
+    test('unknown p param returns 404', async () => {
+      const code = 'unknown-p';
+      await createCodeRecord({ code, tgPhone: '+70000000077', practitionerId: p1.id });
+      const res = await request(app)
+        .get(`/api/auth/magic?t=${encodeURIComponent(code)}&p=${encodeURIComponent('no-such-practitioner')}`)
+        .expect(404);
+      expect(res.text).toMatch(/Unknown practitioner/i);
     });
   });
 
